@@ -1,6 +1,6 @@
 # I03 — Build the application contract matrix
 
-- STATUS: PENDING
+- STATUS: DONE
 - PRIORITY: 1
 - DEPENDS: [I02](../20260904-0902/TASK.md)
 
@@ -11,14 +11,14 @@ the first schema.
 
 ## Plan
 
-- [ ] Inspect the current parser and API read-only.
-- [ ] Create `contracts/parser.md` and `contracts/api.md`.
-- [ ] For each application, document tables and columns, read and write
+- [x] Inspect the current parser and API read-only.
+- [x] Create `contracts/parser.md` and `contracts/api.md`.
+- [x] For each application, document tables and columns, read and write
       operations, data ownership, and required foreign keys.
-- [ ] Document the parser contract: reading `feed`, creating and reading `item`,
+- [x] Document the parser contract: reading `feed`, creating and reading `item`,
       and managing `feed_parser` and `item_hash`.
-- [ ] Explicitly mark disputed API decisions instead of guessing them.
-- [ ] Do not write DDL or change application code.
+- [x] Explicitly mark disputed API decisions instead of guessing them.
+- [x] Do not write DDL or change application code.
 
 ## Definition of done
 
