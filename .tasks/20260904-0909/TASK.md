@@ -15,6 +15,11 @@ cutover.
 - [ ] Document preparing a clean PostgreSQL instance and running
       `dbmate migrate`.
 - [ ] Document running the importer and comparing counts.
+- [ ] Document verifying tombstone cleanup statistics and confirming that the
+      temporary PostgreSQL staging table no longer exists.
+- [ ] State that the library storage-seam API change is merged and deployed
+      only after PostgreSQL schema, grants, import, and cleanup are ready; it is
+      not a SQLite production transition release.
 - [ ] Document creating LOGIN roles outside Git.
 - [ ] Document switching applications and starting parser after its version
       check.

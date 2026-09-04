@@ -19,6 +19,12 @@ without transferring data yet.
 - [ ] Connect to PostgreSQL and refuse to run if target domain tables are not
       empty.
 - [ ] In dry-run mode, print only safe counts and a schema summary.
+- [ ] Count legacy `deleted_items` tombstones and classify valid, missing, and
+      ownership-mismatched rows without printing their contents.
+- [ ] Count plaintext and already-hashed password rows without printing either
+      representation.
+- [ ] Design the tombstone staging table as transaction-local PostgreSQL state;
+      it must never become part of the canonical `public` schema.
 - [ ] Never print credentials or record contents.
 - [ ] Do not transfer data in this task.
 

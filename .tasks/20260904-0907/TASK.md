@@ -16,7 +16,17 @@ Implement migration of confirmed tables only from SQLite to PostgreSQL.
 
 - [ ] Transfer confirmed tables in foreign-key order in one controlled
       operation.
+- [ ] Create a transaction-local PostgreSQL staging table for legacy SQLite
+      `deleted_items` and load tombstones into it after the domain rows exist.
+- [ ] Validate every staged tombstone against item, feed, and user ownership;
+      physically delete only matching imported items.
+- [ ] Report counts for deleted items and ignored missing or ownership-mismatched
+      tombstones without exposing row contents.
+- [ ] Remove the staging table before cutover. It must be dropped on commit and
+      leave no permanent PostgreSQL contract.
 - [ ] Preserve explicit IDs.
+- [ ] Convert any remaining plaintext SQLite passwords to the target password
+      hash before insertion; never write or log plaintext in PostgreSQL.
 - [ ] Treat naive timestamps as UTC.
 - [ ] Preserve aware timestamps as the same instant.
 - [ ] Do not transfer legacy `itemhash`.
@@ -28,4 +38,5 @@ Implement migration of confirmed tables only from SQLite to PostgreSQL.
 ## Definition of done
 
 A repeated run against a non-empty target is rejected, failure consequences are
-unambiguous, and transferred table counts match.
+unambiguous, transferred table counts match, valid tombstones remove the
+corresponding PostgreSQL items, and no staging objects remain after success.
