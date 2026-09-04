@@ -1,0 +1,8 @@
+# Local secrets and environment overrides
+.env
+.env.*
+
+# Editor and operating-system files
+*.swp
+*~
+.DS_Store

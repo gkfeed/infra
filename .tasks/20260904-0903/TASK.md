@@ -1,26 +1,26 @@
-# I03 — Собрать матрицу контрактов приложений
+# I03 — Build the application contract matrix
 
 - STATUS: PENDING
 - PRIORITY: 1
 - DEPENDS: [I02](../20260904-0902/TASK.md)
 
-## Цель
+## Goal
 
-Собрать фактическую матрицу PostgreSQL-контрактов parser и API до проектирования
-первой схемы.
+Build the actual PostgreSQL contract matrix for parser and API before designing
+the first schema.
 
-## План
+## Plan
 
-- [ ] Read-only изучить актуальные parser и API.
-- [ ] Создать `contracts/parser.md` и `contracts/api.md`.
-- [ ] Для каждого приложения зафиксировать таблицы и колонки, операции чтения и
-      записи, владение данными и обязательные внешние ключи.
-- [ ] Зафиксировать parser-контракт: чтение `feed`, создание и чтение `item`,
-      управление `feed_parser` и `item_hash`.
-- [ ] Явно пометить спорные API-решения, не угадывая их.
-- [ ] Не писать DDL и не менять код приложений.
+- [ ] Inspect the current parser and API read-only.
+- [ ] Create `contracts/parser.md` and `contracts/api.md`.
+- [ ] For each application, document tables and columns, read and write
+      operations, data ownership, and required foreign keys.
+- [ ] Document the parser contract: reading `feed`, creating and reading `item`,
+      and managing `feed_parser` and `item_hash`.
+- [ ] Explicitly mark disputed API decisions instead of guessing them.
+- [ ] Do not write DDL or change application code.
 
-## Готово, когда
+## Definition of done
 
-Пересечения и различия приложений видны до проектирования первой схемы, а
-спорные API-решения явно помечены.
+Application overlaps and differences are visible before the first schema is
+designed, and disputed API decisions are explicitly marked.

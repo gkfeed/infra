@@ -1,25 +1,25 @@
-# I08 — Синхронизировать sequences и проверять INTEGER
+# I08 — Synchronize sequences and validate INTEGER ranges
 
 - STATUS: PENDING
 - PRIORITY: 1
 - DEPENDS: [I07](../20260904-0907/TASK.md)
 
-## Цель
+## Goal
 
-Защитить импорт от переполнения ID и синхронизировать PostgreSQL sequences
-после сохранения явных ID.
+Protect the import from ID overflow and synchronize PostgreSQL sequences after
+preserving explicit IDs.
 
-## План
+## Plan
 
-- [ ] До записи проверять, что все импортируемые ID помещаются в PostgreSQL
+- [ ] Before writing, verify that every imported ID fits in PostgreSQL
       `INTEGER`.
-- [ ] При overflow останавливать импорт до любых изменений цели.
-- [ ] После импорта выставлять каждую identity/sequence относительно `MAX(id)`.
-- [ ] Проверять следующий generated ID безопасной вставкой в транзакции с
-      rollback.
-- [ ] Не добавлять полную checksum-систему данных.
+- [ ] On overflow, stop the import before changing the target.
+- [ ] After import, set each identity or sequence relative to `MAX(id)`.
+- [ ] Verify the next generated ID with a safe insert in a rolled-back
+      transaction.
+- [ ] Do not add a full data-checksum system.
 
-## Готово, когда
+## Definition of done
 
-Следующий generated ID не конфликтует с импортированными, а range overflow
-останавливает импорт до изменений цели.
+The next generated ID does not conflict with imported IDs, and range overflow
+stops the import before target changes.

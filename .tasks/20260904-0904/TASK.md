@@ -1,32 +1,32 @@
-# I04 — Добавить каноническую базовую схему
+# I04 — Add the canonical base schema
 
 - STATUS: PENDING
 - PRIORITY: 1
 - DEPENDS: [I03](../20260904-0903/TASK.md)
 
-## Предусловие
+## Prerequisite
 
-API-контракт из I03 подтверждён владельцем.
+The owner has confirmed the API contract from I03.
 
-## Цель
+## Goal
 
-Создать первой миграцией согласованную каноническую PostgreSQL-схему.
+Create the agreed canonical PostgreSQL schema in the first migration.
 
-## План
+## Plan
 
-- [ ] Одной первой миграцией создать согласованные общие и app-specific таблицы
-      в `public`.
-- [ ] Для parser использовать `INTEGER` ID и явную nullability.
-- [ ] Добавить `item.feed_id` с внешним ключом.
-- [ ] Добавить `feed_parser.feed_id` и `item_hash.feed_id` с внешними ключами и
-      cascade.
-- [ ] Добавить `UNIQUE(feed_id, hash)`.
-- [ ] Использовать `TIMESTAMPTZ` для временных полей контракта.
-- [ ] Не включать legacy `itemhash` и SQLite-only таблицы без подтверждённого
-      контракта.
-- [ ] Обновить `schema.sql`.
+- [ ] Create the agreed shared and application-specific tables in `public` in a
+      single initial migration.
+- [ ] Use `INTEGER` IDs and explicit nullability for parser.
+- [ ] Add `item.feed_id` with a foreign key.
+- [ ] Add `feed_parser.feed_id` and `item_hash.feed_id` with cascading foreign
+      keys.
+- [ ] Add `UNIQUE(feed_id, hash)`.
+- [ ] Use `TIMESTAMPTZ` for contract timestamp fields.
+- [ ] Exclude legacy `itemhash` and SQLite-only tables without a confirmed
+      contract.
+- [ ] Update `schema.sql`.
 
-## Готово, когда
+## Definition of done
 
-Чистая PostgreSQL разворачивается одной командой dbmate, а `schema.sql`
-показывает точный общий контракт.
+A clean PostgreSQL instance can be provisioned with one dbmate command, and
+`schema.sql` shows the exact shared contract.

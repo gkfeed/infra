@@ -1,31 +1,31 @@
-# I07 — Импортировать подтверждённые таблицы
+# I07 — Import confirmed tables
 
 - STATUS: PENDING
 - PRIORITY: 1
 - DEPENDS: [I03](../20260904-0903/TASK.md), [I06](../20260904-0906/TASK.md)
 
-## Предусловие
+## Prerequisite
 
-Матрица контрактов I03 окончательно подтверждена.
+The I03 contract matrix is fully confirmed.
 
-## Цель
+## Goal
 
-Реализовать перенос только подтверждённых таблиц из SQLite в PostgreSQL.
+Implement migration of confirmed tables only from SQLite to PostgreSQL.
 
-## План
+## Plan
 
-- [ ] Переносить подтверждённые таблицы в порядке внешних ключей в одной
-      управляемой операции.
-- [ ] Сохранять явные ID.
-- [ ] Трактовать naive timestamps как UTC.
-- [ ] Сохранять aware timestamps как тот же instant.
-- [ ] Не переносить legacy `itemhash`.
-- [ ] Брать политики API-таблиц только из подтверждённого API-контракта.
-- [ ] Запрещать повторный запуск на непустой цели.
-- [ ] Обеспечить, чтобы ошибка оставляла цель чистой либо явно пригодной только
-      для пересоздания.
+- [ ] Transfer confirmed tables in foreign-key order in one controlled
+      operation.
+- [ ] Preserve explicit IDs.
+- [ ] Treat naive timestamps as UTC.
+- [ ] Preserve aware timestamps as the same instant.
+- [ ] Do not transfer legacy `itemhash`.
+- [ ] Take API-table policies only from the confirmed API contract.
+- [ ] Reject repeated runs against a non-empty target.
+- [ ] Ensure an error leaves the target clean or explicitly fit only for
+      recreation.
 
-## Готово, когда
+## Definition of done
 
-Повтор на непустой цели запрещён, последствия ошибки однозначны, а counts по
-перенесённым таблицам совпадают.
+A repeated run against a non-empty target is rejected, failure consequences are
+unambiguous, and transferred table counts match.

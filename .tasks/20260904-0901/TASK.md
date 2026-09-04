@@ -1,25 +1,23 @@
-# I01 — Создать минимальный репозиторий infra
+# I01 — Create the minimal infra repository
 
-- STATUS: PENDING
+- STATUS: DONE
 - PRIORITY: 1
-- DEPENDS: отсутствует
+- DEPENDS: none
 
-## Цель
+## Goal
 
-Создать минимальный каркас отдельного репозитория `gkfeed/infra`, не добавляя
-доменную схему.
+Create the minimal skeleton for the separate `gkfeed/infra` repository without
+adding a domain schema.
 
-## План
+## Plan
 
-- [ ] Создать `AGENTS.md`, `README.md`, `.gitignore` и `Makefile`.
-- [ ] Создать каталог `db/migrations/`.
-- [ ] Настроить запуск закреплённой версии dbmate.
-- [ ] Добавить команды `migrate`, `status`, `new` и `dump`, всегда использующие
+- [x] Create `AGENTS.md`, `README.md`, `.gitignore`, and `Makefile`.
+- [x] Create the `db/migrations/` directory.
+- [x] Configure a pinned dbmate version.
+- [x] Add `migrate`, `status`, `new`, and `dump` commands that always use
       `--strict`.
-- [ ] Не добавлять схему в этой задаче.
+- [x] Do not add a schema in this task.
 
-## Готово, когда
+## Definition of done
 
-- Новый checkout показывает справку и status против явно переданного
-  `DATABASE_URL`.
-- `.env` и секреты игнорируются.
+A fresh checkout shows help and status against a configured `DATABASE_URL`.

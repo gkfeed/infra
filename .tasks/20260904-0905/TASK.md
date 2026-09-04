@@ -1,26 +1,25 @@
-# I05 — Добавить групповые роли и GRANT
+# I05 — Add group roles and grants
 
 - STATUS: PENDING
 - PRIORITY: 1
 - DEPENDS: [I04](../20260904-0904/TASK.md)
 
-## Цель
+## Goal
 
-Выдать приложениям минимально необходимые права без пользователей и секретов.
+Give applications the minimum required privileges without adding users or
+secrets.
 
-## План
+## Plan
 
-- [ ] Forward-миграцией создать NOLOGIN-роли приложений.
-- [ ] Выдать parser права `SELECT` на `feed` и необходимые операции на `item`,
-      `feed_parser` и `item_hash`.
-- [ ] Выдать доступ к необходимым sequences и `SELECT` на
-      `schema_migrations`.
-- [ ] Не выдавать приложениям DDL-права.
-- [ ] Не создавать конкретных LOGIN-пользователей и не добавлять пароли.
-- [ ] Документировать smoke-check разрешённых и запрещённых операций
-      parser-роли.
+- [ ] Create NOLOGIN application roles in a forward migration.
+- [ ] Grant parser `SELECT` on `feed` and the required operations on `item`,
+      `feed_parser`, and `item_hash`.
+- [ ] Grant access to required sequences and `SELECT` on `schema_migrations`.
+- [ ] Do not grant DDL privileges to applications.
+- [ ] Do not create specific LOGIN users or add passwords.
+- [ ] Document smoke checks for allowed and forbidden parser-role operations.
 
-## Готово, когда
+## Definition of done
 
-Документированный smoke-check подтверждает разрешённые и запрещённые операции
-parser-роли.
+The documented smoke checks confirm the parser role's allowed and forbidden
+operations.

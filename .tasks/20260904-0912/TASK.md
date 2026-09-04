@@ -1,28 +1,28 @@
-# I12 — Удалить SQLite importer после cutover
+# I12 — Remove the SQLite importer after cutover
 
 - STATUS: PENDING
 - PRIORITY: 1
-- DEPENDS: отсутствует; см. внешние предусловия ниже
+- DEPENDS: none; see external prerequisites below
 
-## Предусловия
+## Prerequisites
 
-- Cutover завершён.
-- Работа PostgreSQL подтверждена.
-- Владелец явно решил удалить legacy tooling.
+- Cutover is complete.
+- PostgreSQL operation is confirmed.
+- The owner has explicitly decided to remove the legacy tooling.
 
-## Цель
+## Goal
 
-Удалить завершивший работу временный SQLite importer, сохранив историю
-PostgreSQL-контракта.
+Remove the temporary SQLite importer after it has served its purpose while
+preserving the PostgreSQL contract history.
 
-## План
+## Plan
 
-- [ ] Удалить `legacy-import/`, его зависимости и команды.
-- [ ] Оставить историческую запись о выполненном переносе в runbook или release
-      notes.
-- [ ] Не удалять SQL-миграции, `schema.sql` или migration policy.
+- [ ] Remove `legacy-import/`, its dependencies, and its commands.
+- [ ] Keep a historical record of the completed transfer in the runbook or
+      release notes.
+- [ ] Do not remove SQL migrations, `schema.sql`, or migration policy.
 
-## Готово, когда
+## Definition of done
 
-Постоянный infra содержит только PostgreSQL-контракт и не зависит от
+Permanent infra contains only the PostgreSQL contract and does not depend on the
 SQLite/Python importer.

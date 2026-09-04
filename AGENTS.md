@@ -1,37 +1,37 @@
 # AGENTS.md
 
-## Назначение репозитория
+## Repository purpose
 
-Этот репозиторий единолично владеет общей PostgreSQL-схемой gkfeed,
-версионированными SQL-миграциями, правами приложений и описанием контрактов.
-Приложения используют этот контракт, но не выполняют DDL.
+This repository is the sole owner of the shared gkfeed PostgreSQL schema,
+versioned SQL migrations, application privileges, and contract documentation.
+Applications consume this contract but do not execute DDL.
 
-## Работа с задачами
+## Working with tasks
 
-- Задачи находятся в `.tasks/<timestamp>/TASK.md` и выполняются в порядке их
-  timestamp-каталогов.
-- Перед началом задачи проверь её `DEPENDS` и заверши все указанные зависимости.
-- Одна задача должна оставаться небольшим самостоятельным PR.
-- Работай только в границах выбранной задачи и её критериев готовности.
-- Перед каждой задачей читай этот файл и актуальные контракты соседних
-  приложений.
-- Из задач этого репозитория не изменяй код parser или API. Их можно изучать
-  read-only, когда этого требует задача.
+- Tasks live in `.tasks/<timestamp>/TASK.md` and are completed in timestamp
+  directory order.
+- Before starting a task, check its `DEPENDS` field and complete every listed
+  dependency.
+- Keep each task small enough for one self-contained PR.
+- Work only within the selected task and its definition of done.
+- Before each task, read this file and the current contracts of neighboring
+  applications.
+- Do not change parser or API code from this repository. Inspect them read-only
+  when a task requires it.
 
-## Правила миграций и схемы
+## Migration and schema rules
 
-- Используй обычный PostgreSQL SQL, совместимый с закреплённой версией dbmate.
-- Всегда запускай dbmate с `--strict`.
-- Миграции только forward-only.
-- Никогда не редактируй уже применённую миграцию; любое исправление оформляй
-  следующей миграцией.
-- Для несовместимых изменений используй expand–contract.
-- Не добавляй DDL в приложения.
-- Не коммить пароли, LOGIN-роли, реальные connection strings, `.env` или другие
-  секреты.
+- Use plain PostgreSQL SQL compatible with the pinned dbmate version.
+- Always run dbmate with `--strict`.
+- Migrations are forward-only.
+- Never edit an applied migration; add every fix as a new migration.
+- Use expand-contract for incompatible changes.
+- Do not add DDL to applications.
+- Do not commit passwords, LOGIN roles, real connection strings, `.env`, or
+  other secrets.
 
 ## Legacy import
 
-Одноразовый SQLite importer — временное исключение для cutover. Он должен быть
-изолирован от постоянного PostgreSQL-контракта и удалён отдельной финальной
-задачей после подтверждённого cutover. Историю SQL-миграций при этом сохраняй.
+The one-time SQLite importer is a temporary cutover exception. Keep it isolated
+from the permanent PostgreSQL contract and remove it in a separate final task
+after the cutover is confirmed. Preserve the SQL migration history.

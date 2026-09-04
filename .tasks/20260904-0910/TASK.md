@@ -1,25 +1,23 @@
-# I10 — Подготовить контракт для независимых релизов
+# I10 — Prepare the contract for independent releases
 
 - STATUS: PENDING
 - PRIORITY: 1
 - DEPENDS: [I03](../20260904-0903/TASK.md), [I04](../20260904-0904/TASK.md)
 
-## Цель
+## Goal
 
-Определить правила совместимых миграций для независимого обновления
-приложений.
+Define compatible migration rules for independently deployed applications.
 
-## План
+## Plan
 
-- [ ] Описать expand–contract для независимых релизов приложений.
-- [ ] Зафиксировать правило минимальной версии: приложение проверяет наличие
-      обязательного migration ID, но разрешает более новые совместимые
-      миграции.
-- [ ] Добавить шаблон секции совместимости в новый migration PR.
-- [ ] Требовать явный период совместимости при удалении или переименовании общей
-      колонки.
+- [ ] Document expand-contract for independent application releases.
+- [ ] Establish the minimum-version rule: an application checks for its
+      required migration ID but permits newer compatible migrations.
+- [ ] Add a compatibility-section template for new migration PRs.
+- [ ] Require an explicit compatibility period when removing or renaming a
+      shared column.
 
-## Готово, когда
+## Definition of done
 
-Удаление или переименование общей колонки невозможно провести одной миграцией
-без явного периода совместимости.
+A shared column cannot be removed or renamed in a single migration without an
+explicit compatibility period.

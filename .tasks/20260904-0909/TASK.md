@@ -1,27 +1,29 @@
-# I09 — Описать ручной cutover
+# I09 — Document the manual cutover
 
 - STATUS: PENDING
 - PRIORITY: 1
 - DEPENDS: [I05](../20260904-0905/TASK.md), [I08](../20260904-0908/TASK.md)
 
-## Цель
+## Goal
 
-Создать короткий однозначный runbook ручного переключения с SQLite на
-PostgreSQL.
+Create a short, unambiguous runbook for the manual SQLite-to-PostgreSQL
+cutover.
 
-## План
+## Plan
 
-- [ ] Описать остановку SQLite writers и сохранение копии SQLite.
-- [ ] Описать подготовку чистой PostgreSQL и запуск `dbmate migrate`.
-- [ ] Описать запуск importer и сверку counts.
-- [ ] Описать создание LOGIN-ролей вне Git.
-- [ ] Описать переключение приложений и запуск parser после проверки версии.
-- [ ] Для каждого шага дать команду или однозначную проверку.
-- [ ] Явно отметить точку невозврата: после начала PostgreSQL writes переход
-      обратно на SQLite запрещён.
-- [ ] Не автоматизировать deployment в этой задаче.
+- [ ] Document stopping SQLite writers and preserving a SQLite copy.
+- [ ] Document preparing a clean PostgreSQL instance and running
+      `dbmate migrate`.
+- [ ] Document running the importer and comparing counts.
+- [ ] Document creating LOGIN roles outside Git.
+- [ ] Document switching applications and starting parser after its version
+      check.
+- [ ] Give every step a command or unambiguous check.
+- [ ] Explicitly mark the point of no return: after PostgreSQL writes begin,
+      switching back to SQLite is forbidden.
+- [ ] Do not automate deployment in this task.
 
-## Готово, когда
+## Definition of done
 
-Каждый шаг содержит команду или однозначную проверку, а точка невозврата явно
-обозначена.
+Every step has a command or unambiguous check, and the point of no return is
+explicitly marked.
