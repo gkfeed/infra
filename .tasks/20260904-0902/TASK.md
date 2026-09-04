@@ -1,6 +1,6 @@
 # I02 — Define migration rules
 
-- STATUS: PENDING
+- STATUS: DONE
 - PRIORITY: 1
 - DEPENDS: [I01](../20260904-0901/TASK.md)
 
@@ -10,13 +10,14 @@ Define one unambiguous process for working safely with migrations.
 
 ## Plan
 
-- [ ] Document timestamp-based migration names.
-- [ ] Establish that applied files are immutable and migrations are
+- [x] Document timestamp-based migration names.
+- [x] Establish that applied files are immutable and migrations are
       forward-only.
-- [ ] Document expand-contract, manual execution, and the ban on application
+- [x] Document expand-contract, manual execution, and the ban on application
       DDL.
-- [ ] Define `public.schema_migrations` as the migration registry.
-- [ ] Do not create domain tables in this task.
+- [x] Define `public.schema_migrations` as the migration registry.
+- [x] Put the operational rules in `AGENTS.md` and link the detailed policy.
+- [x] Do not create domain tables in this task.
 
 ## Definition of done
 

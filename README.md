@@ -46,3 +46,8 @@ make new NAME=add_example
 Every dbmate invocation enables strict mode. Migrations live in
 `db/migrations/`, and the current dump is written to `db/schema.sql`. Do not
 commit connection strings, passwords, or `.env` files.
+
+Before authoring or applying a migration, read the
+[migration policy](docs/migrations.md). It defines migration naming and
+ordering, the forward-only workflow, manual execution, the
+`public.schema_migrations` registry, and expand-contract changes.

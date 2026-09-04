@@ -21,12 +21,27 @@ Applications consume this contract but do not execute DDL.
 
 ## Migration and schema rules
 
+- Read `docs/migrations.md` before authoring, reviewing, or applying a
+  migration.
 - Use plain PostgreSQL SQL compatible with the pinned dbmate version.
-- Always run dbmate with `--strict`.
-- Migrations are forward-only.
-- Never edit an applied migration; add every fix as a new migration.
-- Use expand-contract for incompatible changes.
-- Do not add DDL to applications.
+- Create migrations only with
+  `make new NAME=<lowercase_snake_case_description>`; the generated 14-digit
+  timestamp is the permanent migration ID and order.
+- Use only this repository's pinned dbmate through its `make` targets. Always
+  run dbmate with `--strict`.
+- `public.schema_migrations` is the authoritative migration registry. Never
+  edit it manually.
+- Migrations are forward-only. Once a migration is committed or applied in any
+  environment, never rename, reorder, delete, or edit it; add every fix as a
+  new migration.
+- Use expand-migrate-contract for incompatible changes. Keep the old contract
+  until all consumers have moved and the explicit compatibility period is
+  complete.
+- After testing a migration with `make migrate` and `make status`, update
+  `db/schema.sql` with `make dump` in the same PR.
+- A designated operator applies merged migrations manually from this
+  repository. Applications and application deployments must never run
+  migrations or other DDL.
 - Do not commit passwords, LOGIN roles, real connection strings, `.env`, or
   other secrets.
 
