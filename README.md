@@ -51,3 +51,6 @@ Before authoring or applying a migration, read the
 [migration policy](docs/migrations.md). It defines migration naming and
 ordering, the forward-only workflow, manual execution, the
 `public.schema_migrations` registry, and expand-contract changes.
+
+See [application roles](docs/application-roles.md) for the grants, operator
+requirements, and executable privilege smoke checks.
