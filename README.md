@@ -54,3 +54,6 @@ ordering, the forward-only workflow, manual execution, the
 
 See [application roles](docs/application-roles.md) for the grants, operator
 requirements, and executable privilege smoke checks.
+
+The temporary [SQLite importer](legacy-import/README.md) currently supports
+read-only dry-run inspection of source counts and an empty PostgreSQL target.
