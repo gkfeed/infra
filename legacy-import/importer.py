@@ -7,6 +7,8 @@ from pathlib import Path
 import sqlite3
 import sys
 
+from normalization import NormalizationError, feed_plan, password_category
+
 # Only these fixed identifiers may appear in reports or SQL.
 TABLES = {
     "users": ("id", "name", "hashed_password"),
@@ -74,19 +76,27 @@ def inspect_source(connection):
             FROM deleted_items d GROUP BY category
         """)
         tombstones.update(dict(rows))
-    passwords = {"null": 0, "plaintext_candidate": 0, "encoded_candidate": 0, "non_text": 0}
+    passwords = dict.fromkeys(("null", "supported_argon2id", "legacy_plaintext",
+                               "malformed_or_unsupported"), 0)
     for (value,) in connection.execute("SELECT hashed_password FROM users"):
-        if value is None:
-            category = "null"
-        elif not isinstance(value, str):
-            category = "non_text"
-        elif value.startswith("$"):
-            category = "encoded_candidate"
-        else:
-            category = "plaintext_candidate"
-        passwords[category] += 1
+        passwords[password_category(value)] += 1
+    if passwords["malformed_or_unsupported"]:
+        raise InspectionError("Password validation failed; category counts: " + json.dumps(passwords))
+    normalization, _, _ = feed_plan(connection, present)
+    reconciliation = {}
+    valid_deleted = connection.execute("""
+        SELECT count(DISTINCT i.id) FROM item i JOIN feed f ON f.id = i.feed_id
+        WHERE EXISTS (SELECT 1 FROM deleted_items d JOIN users u ON u.id = d.user_id
+                      WHERE d.item_id = i.id AND d.user_id = f.user_id)
+    """).fetchone()[0] if summary["deleted_items"]["present"] else 0
+    for table in TABLES:
+        source_count = summary[table].get("rows", 0)
+        removed = normalization["merged_count"] if table == "feed" else valid_deleted if table == "item" else 0
+        reconciliation[table] = {"source_count": source_count, "removed_count": removed,
+                                 "expected_target_count": source_count - removed}
     return {"schema": summary, "other_table_count": len(present - (TABLES.keys() | LEGACY.keys())),
-            "tombstones": tombstones, "passwords": passwords}
+            "tombstones": tombstones, "passwords": passwords,
+            "feed_normalization": normalization, "reconciliation": reconciliation}
 
 
 def inspect_target(connection):
@@ -128,7 +138,7 @@ def main(argv=None):
         print(json.dumps({"mode": "dry-run", "source": source_summary,
                           "target": target_summary}, indent=2))
         return 0
-    except InspectionError as error:
+    except (InspectionError, NormalizationError) as error:
         print(str(error), file=sys.stderr)
     except Exception:
         # Driver exceptions may contain URLs, paths, credentials, SQL, or row values.
