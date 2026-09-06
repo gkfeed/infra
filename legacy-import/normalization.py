@@ -86,16 +86,23 @@ def feed_plan(connection, present):
         if table == 'item':
             if any(fk[3].lower() != 'feed_id' or fk[4] not in (None, 'id') for fk in references):
                 raise NormalizationError("Source contains a feed dependency without a safe remapping rule.")
+        elif table in {'feed_parser', 'item_hash', 'item_hash_new'}:
+            # I07 has explicit merge policies for parser state. item_hash_new is
+            # a strictly validated, excluded source-only artifact.
+            continue
         elif 'feed_id' in columns or references:
-            # Parser state may collide after merging. No conflict policy is approved.
             raise NormalizationError("Source contains a feed dependency without a safe remapping rule.")
         elif table not in {'users', 'feed', 'deleted_items', 'itemhash', 'auth_refresh_tokens',
-                           'webauthn_credentials', 'refresh_tokens'}:
+                           'webauthn_credentials', 'refresh_tokens', 'log'}:
             # Undeclared references in unknown tables cannot be ruled out.
             raise NormalizationError("Source contains an unrecognized table without a dependency policy.")
 
     remapped_items = 0
+    orphan_items = 0
     for (feed_id,) in connection.execute('SELECT feed_id FROM item'):
+        if feed_id not in mapping:
+            orphan_items += 1
+            continue
         remapped = remap_item({'feed_id': feed_id}, mapping)
         remapped_items += remapped['feed_id'] != feed_id
     duplicate_groups = [ids for ids in groups.values() if len(ids) > 1]
@@ -106,5 +113,6 @@ def feed_plan(connection, present):
         'merged_count': len(rows) - len(preserved), 'expected_target_count': len(preserved),
         'id_mapping': [{'old_id': old, 'preserved_id': new} for old, new in mapping.items()],
         'items_to_remap': remapped_items,
+        'orphan_items': orphan_items,
     }
     return report, preserved, mapping

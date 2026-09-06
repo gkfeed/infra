@@ -1,4 +1,5 @@
 import contextlib
+from datetime import timezone
 import io
 import json
 import os
@@ -55,7 +56,8 @@ class InspectionTests(unittest.TestCase):
         self.assertFalse(missing.exists())
 
     def test_bad_arguments_and_connection_errors_are_redacted(self):
-        for args in (['--PRIVATE_SECRET'], ['--database-url', 'PRIVATE_SECRET'],
+        for args in (['--PRIVATE_SECRET'], ['--dry-run', '--execute'],
+                     ['--database-url', 'PRIVATE_SECRET'],
                      ['--sqlite-path', str(self.path), '--database-url', 'PRIVATE_SECRET']):
             output, error = io.StringIO(), io.StringIO()
             with contextlib.redirect_stdout(output), contextlib.redirect_stderr(error):
@@ -106,18 +108,93 @@ class InspectionTests(unittest.TestCase):
             'CREATE TABLE PRIVATE_TABLE (feed_id INTEGER)',
             'CREATE TABLE PRIVATE_TABLE (subscription INTEGER REFERENCES feed(id))',
             'CREATE TABLE PRIVATE_TABLE (unknown_reference INTEGER)',
-            'CREATE TABLE feed_parser (feed_id INTEGER PRIMARY KEY, valid_for TEXT)',
-            'CREATE TABLE item_hash (id INTEGER, hash TEXT, feed_id INTEGER)',
-            'UPDATE item SET feed_id = 999 WHERE id = 1',
         ]
         for statement in statements:
             with self.subTest(statement=statement), contextlib.closing(sqlite3.connect(self.path)) as db, db:
                 db.execute('BEGIN')
                 db.execute(statement)
-                with self.assertRaises(normalization.NormalizationError) as error:
+                with self.assertRaises((importer.InspectionError, normalization.NormalizationError)) as error:
                     importer.inspect_source(db)
                 self.assertNotIn('PRIVATE', str(error.exception))
                 db.rollback()
+
+    def test_orphan_items_are_removed_and_reconciled(self):
+        with contextlib.closing(sqlite3.connect(self.path)) as db, db:
+            db.execute("""
+                INSERT INTO item VALUES
+                    (3, 999, 'PRIVATE_ORPHAN', 'PRIVATE_BODY', '2024-01-01', 'PRIVATE_LINK')
+            """)
+        source = importer.open_source(self.path)
+        self.addCleanup(source.close)
+        report = importer.inspect_source(source)
+        self.assertEqual(report['feed_normalization']['orphan_items'], 1)
+        self.assertEqual(report['reconciliation']['item'], {
+            'source_count': 3, 'removed_count': 3, 'expected_target_count': 0,
+        })
+        self.assertNotIn('PRIVATE', json.dumps(report))
+
+    def test_parser_state_normalization_and_approved_exclusions(self):
+        with contextlib.closing(sqlite3.connect(self.path)) as db, db:
+            db.executescript('''
+                INSERT INTO feed VALUES (4, 'PRIVATE_OTHER_TITLE', 'PRIVATE_URL', 'rss', 1);
+                CREATE TABLE feed_parser (feed_id INTEGER PRIMARY KEY, valid_for TEXT NOT NULL);
+                INSERT INTO feed_parser VALUES
+                    (1, '2024-02-01 00:00:00'), (4, '2024-01-01T02:00:00+02:00'),
+                    (999, '2023-01-01 00:00:00');
+                CREATE TABLE item_hash (id INTEGER PRIMARY KEY, hash TEXT NOT NULL, feed_id INTEGER);
+                INSERT INTO item_hash VALUES
+                    (1, 'PRIVATE_HASH_A', 1), (2, 'PRIVATE_HASH_A', 4),
+                    (3, 'PRIVATE_HASH_B', 999), (4, 'PRIVATE_HASH_C', NULL);
+                CREATE TABLE log (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    ts DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    level TEXT CHECK (level IN ('DEBUG','INFO','WARN','ERROR','FATAL')),
+                    message TEXT NOT NULL
+                );
+                INSERT INTO log VALUES (1, 'PRIVATE_TS', 'INFO', 'PRIVATE_MESSAGE');
+                CREATE TABLE item_hash_new (
+                    id INTEGER PRIMARY KEY, feed_id INTEGER,
+                    FOREIGN KEY (feed_id) REFERENCES feed (id)
+                );
+                INSERT INTO item_hash_new VALUES (1, 1);
+            ''')
+        db = importer.open_source(self.path)
+        self.addCleanup(db.close)
+        report, plan = importer.analyze_source(db)
+        self.assertEqual(report['feed_parser_normalization'], {
+            'source_count': 3, 'orphan_count': 1, 'merged_count': 1,
+            'expected_target_count': 1,
+        })
+        self.assertEqual(plan['feed_parser'][0][0], 1)
+        self.assertEqual(plan['feed_parser'][0][1].isoformat(), '2024-01-01T00:00:00+00:00')
+        self.assertEqual(report['item_hash_normalization'], {
+            'source_count': 4, 'orphan_count': 1, 'merged_count': 1,
+            'expected_target_count': 2,
+        })
+        self.assertEqual([row[0] for row in plan['item_hash']], [1, 4])
+        self.assertEqual(report['excluded_tables']['log']['rows'], 1)
+        self.assertEqual(report['excluded_tables']['item_hash_new']['rows'], 1)
+        self.assertNotIn('PRIVATE', json.dumps(report))
+
+    def test_excluded_table_schema_is_strict(self):
+        for statement in (
+            'CREATE TABLE log (id INTEGER, ts TEXT, level TEXT, message TEXT, extra TEXT)',
+            'CREATE TABLE item_hash_new (id INTEGER)',
+        ):
+            with self.subTest(statement=statement), contextlib.closing(sqlite3.connect(self.path)) as db, db:
+                db.execute('BEGIN')
+                db.execute(statement)
+                with self.assertRaisesRegex(importer.InspectionError, 'approved legacy schema'):
+                    importer.inspect_source(db)
+                db.rollback()
+
+    def test_timestamp_normalization(self):
+        naive = importer.normalize_timestamp('2024-01-01 12:30:00')
+        aware = importer.normalize_timestamp('2024-01-01T14:30:00+02:00')
+        self.assertEqual(naive.tzinfo, timezone.utc)
+        self.assertEqual(naive, aware)
+        with self.assertRaises(normalization.NormalizationError):
+            importer.normalize_timestamp('PRIVATE_INVALID_TIMESTAMP')
 
     def test_password_rules_and_conversion(self):
         from argon2 import PasswordHasher
@@ -195,3 +272,124 @@ class InspectionTests(unittest.TestCase):
             finally:
                 db.execute('DELETE FROM public.users')
                 db.commit()
+
+    @unittest.skipUnless(os.environ.get('IMPORT_TEST_DATABASE_URL'), 'requires disposable PostgreSQL')
+    def test_execute_commit_rollback_reconciliation_and_repeat_rejection(self):
+        import psycopg
+        from argon2 import PasswordHasher
+
+        url = os.environ['IMPORT_TEST_DATABASE_URL']
+        tables = ', '.join(f'public."{table}"' for table in importer.TABLES)
+
+        def empty_target():
+            with psycopg.connect(url) as db:
+                db.execute(f'TRUNCATE TABLE {tables} CASCADE')
+
+        empty_target()
+        self.addCleanup(empty_target)
+        with contextlib.closing(sqlite3.connect(self.path)) as db, db:
+            db.executescript('''
+                UPDATE item SET date = '2024-01-01 12:30:00';
+                INSERT INTO feed VALUES (4, 'PRIVATE_OTHER_TITLE', 'PRIVATE_URL', 'rss', 1);
+                INSERT INTO item VALUES
+                    (3, 4, 'PRIVATE_TITLE_3', 'PRIVATE_BODY_3', '2024-01-01T14:30:00+02:00', 'PRIVATE_LINK'),
+                    (5, 998, 'PRIVATE_ORPHAN_1', 'PRIVATE_BODY_5', '2024-01-01', 'PRIVATE_LINK'),
+                    (6, 999, 'PRIVATE_ORPHAN_2', 'PRIVATE_BODY_6', '2024-01-01', 'PRIVATE_LINK');
+                INSERT INTO deleted_items VALUES (1, 6);
+                CREATE TABLE feed_parser (feed_id INTEGER PRIMARY KEY, valid_for TEXT NOT NULL);
+                INSERT INTO feed_parser VALUES
+                    (1, '2024-02-01 00:00:00'), (4, '2024-01-01T02:00:00+02:00'),
+                    (999, '2023-01-01 00:00:00');
+                CREATE TABLE item_hash (id INTEGER PRIMARY KEY, hash TEXT NOT NULL, feed_id INTEGER);
+                INSERT INTO item_hash VALUES
+                    (1, 'PRIVATE_HASH_A', 1), (2, 'PRIVATE_HASH_A', 4),
+                    (3, 'PRIVATE_HASH_B', 999), (4, 'PRIVATE_HASH_C', NULL);
+                CREATE TABLE webauthn_credentials (
+                    id BLOB, user_id INTEGER, credential TEXT, name TEXT,
+                    created_at TEXT, last_used_at TEXT
+                );
+                CREATE TABLE refresh_tokens (
+                    id TEXT, user_id INTEGER, expires_at TEXT, created_at TEXT
+                );
+                INSERT INTO refresh_tokens VALUES
+                    ('PRIVATE_TOKEN', 1, '2025-01-01T00:00:00Z', '2024-01-01 00:00:00');
+                CREATE TABLE log (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    ts DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    level TEXT CHECK (level IN ('DEBUG','INFO','WARN','ERROR','FATAL')),
+                    message TEXT NOT NULL
+                );
+                INSERT INTO log VALUES (1, 'PRIVATE_TS', 'INFO', 'PRIVATE_MESSAGE');
+                CREATE TABLE item_hash_new (
+                    id INTEGER PRIMARY KEY, feed_id INTEGER,
+                    FOREIGN KEY (feed_id) REFERENCES feed (id)
+                );
+                INSERT INTO item_hash_new VALUES (1, 1);
+            ''')
+            db.execute(
+                'INSERT INTO webauthn_credentials VALUES (?, ?, ?, ?, ?, ?)',
+                (b'PRIVATE_ID', 1, 'PRIVATE_CREDENTIAL', 'PRIVATE_KEY_NAME',
+                 '2024-01-01 00:00:00', None),
+            )
+            db.execute('UPDATE item SET title = NULL WHERE id = 3')
+
+        output, error = io.StringIO(), io.StringIO()
+        with contextlib.redirect_stdout(output), contextlib.redirect_stderr(error):
+            self.assertEqual(importer.main([
+                '--execute', '--sqlite-path', str(self.path), '--database-url', url,
+            ]), 1)
+        self.assertEqual(output.getvalue(), '')
+        self.assertNotIn('PRIVATE', error.getvalue())
+        with psycopg.connect(url) as db:
+            self.assertTrue(all(db.execute(
+                f'SELECT count(*) FROM public."{table}"'
+            ).fetchone()[0] == 0 for table in importer.TABLES))
+
+        with contextlib.closing(sqlite3.connect(self.path)) as db, db:
+            db.execute("UPDATE item SET title = 'PRIVATE_TITLE_3' WHERE id = 3")
+
+        output = io.StringIO()
+        with contextlib.redirect_stdout(output):
+            self.assertEqual(importer.main([
+                '--execute', '--sqlite-path', str(self.path), '--database-url', url,
+            ]), 0)
+        report = json.loads(output.getvalue())
+        self.assertEqual(report['mode'], 'execute')
+        self.assertEqual(report['transaction'], 'committed')
+        self.assertEqual(report['target_after'], {
+            'users': 3, 'feed': 1, 'item': 1, 'feed_parser': 1,
+            'item_hash': 2, 'webauthn_credentials': 1, 'refresh_tokens': 1,
+        })
+        self.assertEqual(report['deleted_distinct_items'], 2)
+        self.assertEqual(report['source']['feed_normalization']['orphan_items'], 2)
+        self.assertEqual(report['source']['tombstones']['missing'], 3)
+        self.assertNotIn('PRIVATE', output.getvalue())
+
+        with psycopg.connect(url) as db:
+            self.assertEqual(db.execute(
+                'SELECT valid_for FROM public.feed_parser WHERE feed_id = 1'
+            ).fetchone()[0].isoformat(), '2024-01-01T00:00:00+00:00')
+            self.assertEqual(db.execute(
+                'SELECT id FROM public.item_hash ORDER BY id'
+            ).fetchall(), [(1,), (4,)])
+            password = db.execute(
+                'SELECT hashed_password FROM public.users WHERE id = 1'
+            ).fetchone()[0]
+            self.assertTrue(PasswordHasher().verify(password, 'PRIVATE_PASSWORD'))
+            self.assertIsNone(db.execute(
+                "SELECT to_regclass('public.legacy_deleted_items')"
+            ).fetchone()[0])
+
+        before = report['target_after']
+        output, error = io.StringIO(), io.StringIO()
+        with contextlib.redirect_stdout(output), contextlib.redirect_stderr(error):
+            self.assertEqual(importer.main([
+                '--execute', '--sqlite-path', str(self.path), '--database-url', url,
+            ]), 1)
+        self.assertEqual(output.getvalue(), '')
+        self.assertIn('must be empty', error.getvalue())
+        with psycopg.connect(url) as db:
+            after = {table: db.execute(
+                f'SELECT count(*) FROM public."{table}"'
+            ).fetchone()[0] for table in importer.TABLES}
+        self.assertEqual(after, before)
