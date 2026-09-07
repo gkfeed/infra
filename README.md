@@ -55,5 +55,9 @@ ordering, the forward-only workflow, manual execution, the
 See [application roles](docs/application-roles.md) for the grants, operator
 requirements, and executable privilege smoke checks.
 
-The temporary [SQLite importer](legacy-import/README.md) currently supports
-read-only dry-run inspection of source counts and an empty PostgreSQL target.
+Follow [the manual cutover runbook](docs/manual-cutover.md) for the one-time
+production transfer.
+
+The temporary [SQLite importer](legacy-import/README.md) supports read-only
+inspection and the controlled one-time transfer into an empty PostgreSQL
+target.
