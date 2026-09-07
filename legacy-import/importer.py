@@ -45,6 +45,38 @@ EXCLUDED_DEFINITIONS = {
 CORE_TABLES = ("users", "feed", "item")
 LOCK_TABLES = tuple(TABLES)
 BATCH_SIZE = 500
+INTEGER_MIN = -(2 ** 31)
+INTEGER_MAX = 2 ** 31 - 1
+IDENTITY_TABLES = ("users", "feed", "item", "item_hash")
+INTEGER_COLUMNS = {
+    "users": ("id",), "feed": ("id", "user_id"),
+    "item": ("id", "feed_id"), "feed_parser": ("feed_id",),
+    "item_hash": ("id", "feed_id"), "webauthn_credentials": ("user_id",),
+    "refresh_tokens": ("user_id",), "deleted_items": ("user_id", "item_id"),
+}
+
+
+def validate_integer_ranges(connection, present):
+    # Check even discarded rows: normalization must not hide unsafe input.
+    for table, columns in INTEGER_COLUMNS.items():
+        if table not in present:
+            continue
+        for column in columns:
+            nullable = (table == "item_hash" and column == "feed_id") or table == "deleted_items"
+            null_check = "" if nullable else f'"{column}" IS NULL OR '
+            invalid = connection.execute(
+                f'SELECT 1 FROM "{table}" WHERE {null_check}'
+                f'''("{column}" IS NOT NULL AND (typeof("{column}") != 'integer' '''
+                f'OR "{column}" < ? OR "{column}" > ?)) LIMIT 1',
+                (INTEGER_MIN, INTEGER_MAX),
+            ).fetchone()
+            if invalid:
+                raise InspectionError("SQLite integer ID or reference is invalid or out of range.")
+            if table in IDENTITY_TABLES and column == "id" and connection.execute(
+                f'SELECT 1 FROM "{table}" WHERE id = ? LIMIT 1', (INTEGER_MAX,)
+            ).fetchone():
+                raise InspectionError("SQLite identity ID leaves no room for a generated INTEGER ID.")
+
 
 
 class InspectionError(Exception):
@@ -217,6 +249,7 @@ def _item_hash_plan(connection, present, mapping):
 
 def analyze_source(connection):
     present, schema = _source_schema(connection)
+    validate_integer_ranges(connection, present)
     passwords = dict.fromkeys(("null", "supported_argon2id", "legacy_plaintext",
                                "malformed_or_unsupported"), 0)
     for (value,) in connection.execute("SELECT hashed_password FROM users"):
@@ -374,6 +407,62 @@ def _target_tombstones(target):
     return report, deleted
 
 
+def synchronize_sequences(target):
+    from psycopg import sql
+    from uuid import uuid4
+
+    sequences = {}
+    for table in IDENTITY_TABLES:
+        row = target.execute(
+            "SELECT n.nspname, c.relname FROM pg_class c "
+            "JOIN pg_namespace n ON n.oid = c.relnamespace "
+            "WHERE c.oid = pg_get_serial_sequence(%s, 'id')::regclass",
+            (f"public.{table}",),
+        ).fetchone()
+        if row is None:
+            raise InspectionError("A required PostgreSQL identity sequence is missing.")
+        maximum = target.execute(f'SELECT max(id) FROM public."{table}"').fetchone()[0]
+        next_id = max(1, (maximum or 0) + 1)
+        if next_id > INTEGER_MAX:
+            raise InspectionError("PostgreSQL identity sequence has no INTEGER IDs remaining.")
+        sequences[table] = (sql.Identifier(*row), next_id)
+
+    def restart():
+        for identifier, next_id in sequences.values():
+            # RESTART is transactional, unlike setval, so failed imports restore sequences.
+            target.execute(sql.SQL("ALTER SEQUENCE {} RESTART WITH {}").format(
+                identifier, sql.Literal(next_id)))
+
+    restart()
+    target.execute("SAVEPOINT identity_probe")
+    marker = "legacy-import-probe-" + uuid4().hex
+    user_id = target.execute(
+        "INSERT INTO public.users (name) VALUES (%s) RETURNING id", (marker,)
+    ).fetchone()[0]
+    feed_id = target.execute(
+        "INSERT INTO public.feed (title, url, type, user_id) VALUES (%s, %s, %s, %s) RETURNING id",
+        (marker, marker, marker, user_id),
+    ).fetchone()[0]
+    item_id = target.execute(
+        "INSERT INTO public.item (feed_id, title, text, date, link) "
+        "VALUES (%s, %s, %s, CURRENT_TIMESTAMP, %s) RETURNING id",
+        (feed_id, marker, marker, marker),
+    ).fetchone()[0]
+    hash_id = target.execute(
+        "INSERT INTO public.item_hash (hash, feed_id) VALUES (%s, %s) RETURNING id",
+        (marker, feed_id),
+    ).fetchone()[0]
+    if (user_id, feed_id, item_id, hash_id) != tuple(
+        sequences[table][1] for table in IDENTITY_TABLES
+    ):
+        raise InspectionError("PostgreSQL generated ID verification failed.")
+    target.execute("ROLLBACK TO SAVEPOINT identity_probe")
+    target.execute("RELEASE SAVEPOINT identity_probe")
+    # nextval is not rolled back with the probe rows. Restore the verified next IDs.
+    restart()
+    return {table: {"verified": True} for table in IDENTITY_TABLES}
+
+
 def execute_import(source, target):
     target.execute("SET TRANSACTION ISOLATION LEVEL SERIALIZABLE")
     target.execute(
@@ -430,7 +519,9 @@ def execute_import(source, target):
         if count != expected:
             raise InspectionError("PostgreSQL row-count reconciliation failed.")
         actual[table] = count
+    sequences = synchronize_sequences(target)
     return {
+        "identity_sequences": sequences,
         "mode": "execute",
         "source": source_report,
         "target_before": initial_target,

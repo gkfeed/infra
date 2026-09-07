@@ -34,6 +34,90 @@ class InspectionTests(unittest.TestCase):
             ''')
             db.execute('UPDATE users SET hashed_password = ? WHERE id = 2', (VALID_HASH,))
 
+    def test_integer_range_checks_cover_every_integer_column(self):
+        for table, columns in importer.INTEGER_COLUMNS.items():
+            for column in columns:
+                with self.subTest(table=table, column=column):
+                    with contextlib.closing(sqlite3.connect(':memory:')) as db:
+                        db.execute(f'CREATE TABLE "{table}" (' + ', '.join(
+                            f'"{name}"' for name in columns) + ')')
+                        for value in (importer.INTEGER_MIN - 1, importer.INTEGER_MAX + 1,
+                                      'PRIVATE_ID', 1.5):
+                            db.execute(f'DELETE FROM "{table}"')
+                            values = [value if name == column else 1 for name in columns]
+                            db.execute(f'INSERT INTO "{table}" VALUES (' +
+                                       ', '.join('?' for _ in columns) + ')', values)
+                            with self.assertRaisesRegex(importer.InspectionError, 'out of range'):
+                                importer.validate_integer_ranges(db, {table})
+                        db.execute(f'DELETE FROM "{table}"')
+                        db.execute(f'INSERT INTO "{table}" VALUES (' +
+                                   ', '.join('?' for _ in columns) + ')',
+                                   [importer.INTEGER_MIN for _ in columns])
+                        importer.validate_integer_ranges(db, {table})
+                        db.execute(f'DELETE FROM "{table}"')
+                        values = [importer.INTEGER_MAX if name == column else 1 for name in columns]
+                        db.execute(f'INSERT INTO "{table}" VALUES (' +
+                                   ', '.join('?' for _ in columns) + ')', values)
+                        if table in importer.IDENTITY_TABLES and column == 'id':
+                            with self.assertRaisesRegex(importer.InspectionError, 'no room'):
+                                importer.validate_integer_ranges(db, {table})
+                        else:
+                            importer.validate_integer_ranges(db, {table})
+
+    @unittest.skipUnless(os.environ.get('IMPORT_TEST_DATABASE_URL'), 'requires disposable PostgreSQL')
+    def test_overflow_precedes_writes_and_preserves_sequences(self):
+        import psycopg
+        from unittest.mock import patch
+        url = os.environ['IMPORT_TEST_DATABASE_URL']
+        with contextlib.closing(sqlite3.connect(self.path)) as source, source:
+            source.execute('UPDATE deleted_items SET item_id = ?', (importer.INTEGER_MAX + 1,))
+        with psycopg.connect(url) as db:
+            before = [db.execute(f'SELECT last_value, is_called FROM public.{t}_id_seq').fetchone()
+                      for t in importer.IDENTITY_TABLES]
+            db.rollback()
+            with contextlib.closing(importer.open_source(self.path)) as source:
+                with patch.object(importer, '_copy_table') as copy:
+                    with self.assertRaisesRegex(importer.InspectionError, 'out of range'):
+                        importer.execute_import(source, db)
+                    copy.assert_not_called()
+            db.rollback()
+            self.assertEqual(before, [db.execute(
+                f'SELECT last_value, is_called FROM public.{t}_id_seq').fetchone()
+                for t in importer.IDENTITY_TABLES])
+            self.assertTrue(all(db.execute(f'SELECT count(*) FROM public."{t}"').fetchone()[0] == 0
+                                for t in importer.TABLES))
+
+    @unittest.skipUnless(os.environ.get('IMPORT_TEST_DATABASE_URL'), 'requires disposable PostgreSQL')
+    def test_sequence_probes_empty_sparse_negative_and_boundary_ids(self):
+        import psycopg
+        url = os.environ['IMPORT_TEST_DATABASE_URL']
+        for maximum in (None, -3, 0, 1500, importer.INTEGER_MAX - 1):
+            with self.subTest(maximum=maximum), psycopg.connect(url) as db:
+                before = [db.execute(f'SELECT last_value, is_called FROM public.{t}_id_seq').fetchone()
+                          for t in importer.IDENTITY_TABLES]
+                if maximum is not None:
+                    db.execute('INSERT INTO public.users (id, name) VALUES (%s, %s)',
+                               (maximum, 'PRIVATE_NAME'))
+                    db.execute("INSERT INTO public.feed (id, title, url, type, user_id) "
+                               "VALUES (%s, '', '', '', %s)", (maximum, maximum))
+                    db.execute("INSERT INTO public.item (id, feed_id, title, text, date, link) "
+                               "VALUES (%s, %s, '', '', CURRENT_TIMESTAMP, '')", (maximum, maximum))
+                    db.execute("INSERT INTO public.item_hash (id, hash) VALUES (%s, '')", (maximum,))
+                importer.synchronize_sequences(db)
+                expected = max(1, (maximum or 0) + 1)
+                for table in importer.IDENTITY_TABLES:
+                    self.assertEqual(db.execute(f'SELECT count(*) FROM public."{table}"').fetchone()[0],
+                                     int(maximum is not None))
+                    self.assertEqual(db.execute(
+                        f'SELECT last_value, is_called FROM public.{table}_id_seq').fetchone(),
+                        (expected, False))
+                    self.assertEqual(db.execute(
+                        f"SELECT nextval('public.{table}_id_seq')").fetchone()[0], expected)
+                db.rollback()
+                self.assertEqual(before, [db.execute(
+                    f'SELECT last_value, is_called FROM public.{t}_id_seq').fetchone()
+                    for t in importer.IDENTITY_TABLES])
+
     def test_counts_and_no_record_output(self):
         db = importer.open_source(self.path)
         self.addCleanup(db.close)
@@ -361,11 +445,18 @@ class InspectionTests(unittest.TestCase):
             'item_hash': 2, 'webauthn_credentials': 1, 'refresh_tokens': 1,
         })
         self.assertEqual(report['deleted_distinct_items'], 2)
+        self.assertEqual(report['identity_sequences'], {
+            table: {'verified': True} for table in importer.IDENTITY_TABLES
+        })
         self.assertEqual(report['source']['feed_normalization']['orphan_items'], 2)
         self.assertEqual(report['source']['tombstones']['missing'], 3)
         self.assertNotIn('PRIVATE', output.getvalue())
 
         with psycopg.connect(url) as db:
+            for table, expected in {'users': 4, 'feed': 2, 'item': 4, 'item_hash': 5}.items():
+                self.assertEqual(db.execute(
+                    f'SELECT last_value, is_called FROM public.{table}_id_seq').fetchone(),
+                    (expected, False))
             self.assertEqual(db.execute(
                 'SELECT valid_for FROM public.feed_parser WHERE feed_id = 1'
             ).fetchone()[0].isoformat(), '2024-01-01T00:00:00+00:00')

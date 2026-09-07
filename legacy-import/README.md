@@ -1,6 +1,6 @@
 # Temporary SQLite importer
 
-I07 provides a controlled SQLite-to-PostgreSQL transfer. Remove this directory
+The importer provides a controlled SQLite-to-PostgreSQL transfer. Remove this directory
 in I12 after the owner confirms cutover.
 
 Use Python 3.10 or later and install the isolated dependencies:
@@ -42,8 +42,9 @@ Execute builds a fresh plan from the same SQLite read transaction, inserts in
 foreign-key order, reconciles every target count, and commits once. Any error
 rolls the complete operation back. A second execute against the populated target
 is rejected. The operator connection needs SELECT and INSERT on the domain
-tables, DELETE on `item`, and TEMPORARY on the database. It must see all rows
-without row-level filtering.
+tables, DELETE on `item`, TEMPORARY on the database, and ownership of the
+four identity sequences for transactional `ALTER SEQUENCE ... RESTART`. It must
+see all rows without row-level filtering. Use the infra operator connection.
 
 The JSON report includes counts and fixed contract table and column names.
 Unknown tables abort the operation without exposing their names. The approved
@@ -127,17 +128,38 @@ iterations, four lanes, a fresh random 16-byte salt, and a 32-byte output.
 Execute calls it immediately before insertion. Dry-run only reports the
 conversion count.
 
-## Private output and I08 boundary
+## Private output
 
 The JSON operator report contains numeric feed ID mappings. Treat a saved full
 report as private production-derived data. Long-lived rehearsal evidence should
 keep only aggregate counts and a mapping checksum. Never save record contents,
 credentials, hashes, connection URLs, or driver messages.
 
-I07 preserves explicit IDs but does not synchronize PostgreSQL identity
-sequences. Sequence range checks, synchronization, and next-ID probes belong to
-I08. An I07 transfer can pass its data acceptance checks without proving that
-the target is ready for application writes.
+## Integer IDs and sequences
+
+Before any target writes, both modes check every integer ID and reference in
+present canonical source tables and `deleted_items`. Values must be integers
+between -2147483648 and 2147483647. Only `item_hash.feed_id` and tombstone
+columns accept null. Token text IDs and WebAuthn binary IDs are not integer
+columns. Checks include rows that normalization would discard; excluded legacy
+tables are not checked. Errors contain no offending values.
+
+An identity ID of 2147483647 is rejected before writes because it leaves no
+room for a generated ID. This conservative check also includes rows that would
+be merged or deleted.
+
+After tombstone deletion and count reconciliation, execute restarts the `users`,
+`feed`, `item`, and `item_hash` identity sequences at `max(1, MAX(id) + 1)`.
+Empty tables and tables containing only nonpositive IDs start at 1. It discovers
+each sequence through `pg_get_serial_sequence`.
+
+Execute inserts a temporary user, feed, item, and item hash using generated IDs
+inside a savepoint and checks the returned IDs. It rolls back those rows and
+restarts the sequences again so the probes consume no application IDs. The
+report contains a verification flag for each sequence. Sequence restarts and
+domain writes share the import transaction, so an error restores both. This
+uses transactional `ALTER SEQUENCE ... RESTART`, not nontransactional `setval`.
+No permanent schema change or new migration is needed.
 
 Run all permanent checks with a disposable PostgreSQL URL:
 
