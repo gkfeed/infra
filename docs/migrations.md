@@ -40,6 +40,8 @@ make dump
 ```
 
 - Include the updated `db/schema.sql` in the migration PR.
+- Complete the migration compatibility section from
+  `.github/PULL_REQUEST_TEMPLATE/migration.md` in the PR description.
 - Review compatibility, locks, backfill cost, and grants.
 - Use dbmate's default transaction. Any exception must be explicit and
   reviewed.
@@ -56,6 +58,26 @@ DATABASE_URL='<operator connection URL>' make status
 Keep credentials, LOGIN roles, real connection URLs, and `.env` files out of
 Git.
 
+## Independent application releases
+
+Parser and API releases do not have to happen together. Each application
+release must declare the migration ID that first provides the database contract
+it needs. At startup, the application checks that
+`public.schema_migrations` contains that ID or a later ID. It rejects an older
+schema, but it must not require its minimum ID to be the latest applied
+migration, compare against an exact migration count, or reject later compatible
+migrations. This threshold check relies on strict migration ordering and the
+rule that nobody edits the registry by hand.
+
+When a migration expands an application's contract, merge and apply it before
+deploying the application release that requires it. Record the new minimum
+migration ID in that application and in the migration PR's compatibility
+section. An application deployment does not apply the migration.
+
+Later migrations remain compatible through the rules below. A minimum-version
+check proves that required schema has been applied. It does not make a contract
+migration safe on its own.
+
 ## Incompatible changes
 
 Use separate releases and forward migrations:
@@ -69,6 +91,28 @@ Use separate releases and forward migrations:
 
 This applies to incompatible renames, type changes, removals, and new mandatory
 values.
+
+A shared column cannot be renamed or removed in one migration. The expand
+migration adds its replacement while the old column remains usable. During the
+migrate phase, every parser and API version that can run against the database
+must work with the expanded schema, and any required backfill must finish. A
+later contract migration may remove the old column only when the compatibility
+period recorded in the expand PR has ended.
+
+The compatibility period must name:
+
+- the migration ID that starts it;
+- every affected application and the first release that no longer needs the
+  old contract;
+- how mixed old and new application versions behave during deployment;
+- the end condition and the evidence that will prove it, including deployment
+  of the named application releases and completion of any backfill;
+- the earliest date or operational milestone when the contract migration may
+  be applied.
+
+The contract migration PR must link that evidence. An elapsed date without
+deployment and backfill evidence does not end the period. If the evidence is
+missing, keep the old column.
 
 ## Boundaries
 
