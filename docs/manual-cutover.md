@@ -221,8 +221,8 @@ mappings.
    jq -e '
      .mode == "execute"
      and .transaction == "committed"
-     and (.target_before | all(.[]; . == 0))
-     and (.identity_sequences | all(.[]; . == true))
+     and (.target_before | all(.[]; .rows == 0))
+     and (.identity_sequences | all(.[]; .verified == true))
    ' "$CUTOVER_DIR/execute.json"
 
    jq -S '.source.reconciliation | map_values(.expected_target_count)' \
