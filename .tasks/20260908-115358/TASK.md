@@ -1,6 +1,6 @@
 # I11C: Skip valid tombstoned items before PostgreSQL insertion
 
-- STATUS: PENDING
+- STATUS: DONE
 - PRIORITY: 1
 - DEPENDS: [I11B](../20260907-145623/TASK.md)
 
@@ -24,38 +24,56 @@ existing import report, reconciliation rules, and transaction guarantees.
 
 ## Plan
 
-- [ ] Compute the distinct IDs of valid tombstoned items from the same
+- [x] Compute the distinct IDs of valid tombstoned items from the same
       read-only SQLite transaction used to build the import plan.
-- [ ] Exclude those IDs while copying `item` rows instead of inserting and
+- [x] Exclude those IDs while copying `item` rows instead of inserting and
       deleting them in PostgreSQL.
-- [ ] Preserve the meanings of `tombstones.valid`, `tombstones.missing`,
+- [x] Preserve the meanings of `tombstones.valid`, `tombstones.missing`,
       `tombstones.ownership_mismatched`, and `deleted_distinct_items`, including
       duplicate tombstone rows.
-- [ ] Replace the insert-then-delete target check with a PostgreSQL-side check
+- [x] Replace the insert-then-delete target check with a PostgreSQL-side check
       proving that no valid tombstoned item reached the target.
-- [ ] Preserve orphan removal, feed-ID remapping, target row reconciliation,
+- [x] Preserve orphan removal, feed-ID remapping, target row reconciliation,
       identity-sequence synchronization, rollback behavior, and report shape.
-- [ ] Add tests covering duplicate valid tombstones, missing tombstones,
+- [x] Add tests covering duplicate valid tombstones, missing tombstones,
       ownership mismatches, orphan items, and an excluded item with large TOAST
       content.
-- [ ] Update the temporary importer documentation to describe the pre-insert
+- [x] Update the temporary importer documentation to describe the pre-insert
       exclusion and its target-side verification.
-- [ ] Do not add `VACUUM FULL`, application DDL, a schema migration, or a
+- [x] Do not add `VACUUM FULL`, application DDL, a schema migration, or a
       permanent staging table.
 
 ## Validation
 
-- [ ] Run all importer tests against disposable PostgreSQL 17 with
+- [x] Run all importer tests against disposable PostgreSQL 17 with
       `IMPORT_TEST_DATABASE_URL` set and run the orphan-analysis tests.
-- [ ] Repeat dry-run and execute against the production-sized rehearsal
+- [x] Repeat dry-run and execute against the production-sized rehearsal
       snapshot, then pass the documented report gates and diffs.
-- [ ] Force a checkpoint and record aggregate `pg_database_size`, `item` heap,
+- [x] Force a checkpoint and record aggregate `pg_database_size`, `item` heap,
       index, TOAST, WAL, and `PGDATA` sizes without committing private reports.
-- [ ] Confirm the source SQLite checksum is unchanged and a repeated execute is
+- [x] Confirm the source SQLite checksum is unchanged and a repeated execute is
       rejected.
-- [ ] Run the API `/api/v1/list` and `/api/v1/get_items?limit=2` smoke checks
+- [x] Run the API `/api/v1/list` and `/api/v1/get_items?limit=2` smoke checks
       through `gkfeed_api`, and run the parser schema check through
       `gkfeed_parser`.
+
+All 17 importer tests passed against a disposable PostgreSQL 17 database, and
+both orphan-analysis tests passed. The fault-injection case forced a valid
+tombstoned item through the copy transform; the PostgreSQL exclusion check
+rejected it and the transaction rolled back.
+
+The production-sized dry-run and execute reports passed the documented gates
+and diffs. Execute retained 2,344 items and reported 84,109 distinct valid
+tombstoned items. After a checkpoint, `pg_database_size` was 638,225,555 bytes.
+The item heap was 532,480 bytes, its indexes were 73,728 bytes, and its TOAST
+relation was 601,915,392 bytes. WAL occupied 671,100,928 bytes and complete
+`PGDATA` occupied 1,325,100,334 bytes. No private report was retained.
+
+The source SQLite checksum was unchanged and a repeated execute failed the
+empty-target guard. The parser schema check passed through a LOGIN role with
+only `gkfeed_parser` membership. API commit `f6520e6` returned HTTP 200 with
+valid JSON for `/api/v1/list` and `/api/v1/get_items?limit=2` through a LOGIN
+role with only `gkfeed_api` membership.
 
 ## Definition of done
 

@@ -42,9 +42,9 @@ Execute builds a fresh plan from the same SQLite read transaction, inserts in
 foreign-key order, reconciles every target count, and commits once. Any error
 rolls the complete operation back. A second execute against the populated target
 is rejected. The operator connection needs SELECT and INSERT on the domain
-tables, DELETE on `item`, TEMPORARY on the database, and ownership of the
-four identity sequences for transactional `ALTER SEQUENCE ... RESTART`. It must
-see all rows without row-level filtering. Use the infra operator connection.
+tables, TEMPORARY on the database, and ownership of the four identity sequences
+for transactional `ALTER SEQUENCE ... RESTART`. It must see all rows without
+row-level filtering. Use the infra operator connection.
 
 The JSON report includes counts and fixed contract table and column names.
 Unknown tables abort the operation without exposing their names. The approved
@@ -62,12 +62,15 @@ Each tombstone row counts once, including duplicates:
 - `valid`: those records exist and the feed belongs to the claimed user.
 - `ownership_mismatched`: those records exist but ownership does not match.
 
-Execute creates `TEMP TABLE legacy_deleted_items (user_id INTEGER, item_id
-INTEGER) ON COMMIT DROP`, referenced as `pg_temp.legacy_deleted_items`. It loads
-tombstones after domain rows. Valid tombstones delete matching imported items.
-Missing and ownership-mismatched tombstones are counted but do not delete a row.
-Commit drops the table; rollback undoes its creation. It is never created in
-`public`, added to a migration, or included in `db/schema.sql`.
+The source plan contains the distinct item IDs covered by valid tombstones.
+Execute skips those items before converting or inserting their contents. It
+creates `TEMP TABLE legacy_valid_tombstoned_items (item_id INTEGER PRIMARY KEY)
+ON COMMIT DROP`, referenced as `pg_temp.legacy_valid_tombstoned_items`, and
+loads the planned IDs. A PostgreSQL join then verifies that none of those IDs
+exists in `public.item`. Missing and ownership-mismatched tombstones remain in
+the aggregate report but do not exclude an item. Commit drops the table;
+rollback undoes its creation. It is never created in `public`, added to a
+migration, or included in `db/schema.sql`.
 
 ## Feed and parser-state normalization
 
@@ -146,9 +149,9 @@ tables are not checked. Errors contain no offending values.
 
 An identity ID of 2147483647 is rejected before writes because it leaves no
 room for a generated ID. This conservative check also includes rows that would
-be merged or deleted.
+be merged, orphaned, or excluded.
 
-After tombstone deletion and count reconciliation, execute restarts the `users`,
+After tombstone exclusion and count reconciliation, execute restarts the `users`,
 `feed`, `item`, and `item_hash` identity sequences at `max(1, MAX(id) + 1)`.
 Empty tables and tables containing only nonpositive IDs start at 1. It discovers
 each sequence through `pg_get_serial_sequence`.

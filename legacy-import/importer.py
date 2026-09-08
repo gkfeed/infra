@@ -161,10 +161,10 @@ def normalize_timestamp(value):
     return parsed.astimezone(timezone.utc)
 
 
-def _tombstone_report(connection, present):
+def _tombstone_plan(connection, present):
     report = {"valid": 0, "missing": 0, "ownership_mismatched": 0}
     if "deleted_items" not in present:
-        return report, 0
+        return report, ()
     rows = connection.execute("""
         SELECT CASE
             WHEN NOT EXISTS (SELECT 1 FROM item i JOIN feed f ON f.id = i.feed_id
@@ -177,12 +177,13 @@ def _tombstone_report(connection, present):
         FROM deleted_items d GROUP BY category
     """)
     report.update(dict(rows))
-    deleted = connection.execute("""
-        SELECT count(DISTINCT i.id) FROM item i JOIN feed f ON f.id = i.feed_id
+    valid_item_ids = tuple(row[0] for row in connection.execute("""
+        SELECT DISTINCT i.id FROM item i JOIN feed f ON f.id = i.feed_id
         WHERE EXISTS (SELECT 1 FROM deleted_items d JOIN users u ON u.id = d.user_id
                       WHERE d.item_id = i.id AND d.user_id = f.user_id)
-    """).fetchone()[0]
-    return report, deleted
+        ORDER BY i.id
+    """))
+    return report, valid_item_ids
 
 
 def _feed_parser_plan(connection, present, mapping):
@@ -260,7 +261,7 @@ def analyze_source(connection):
     normalization, feeds, mapping = feed_plan(connection, present)
     feed_parser, feed_parser_rows = _feed_parser_plan(connection, present, mapping)
     item_hash, item_hash_rows = _item_hash_plan(connection, present, mapping)
-    tombstones, valid_deleted = _tombstone_report(connection, present)
+    tombstones, valid_tombstoned_item_ids = _tombstone_plan(connection, present)
 
     reconciliation = {}
     for table in TABLES:
@@ -268,7 +269,7 @@ def analyze_source(connection):
         if table == "feed":
             removed = normalization["merged_count"]
         elif table == "item":
-            removed = valid_deleted + normalization["orphan_items"]
+            removed = len(valid_tombstoned_item_ids) + normalization["orphan_items"]
         elif table == "feed_parser":
             removed = feed_parser["orphan_count"] + feed_parser["merged_count"]
         elif table == "item_hash":
@@ -299,6 +300,7 @@ def analyze_source(connection):
         "present": present,
         "feeds": feeds,
         "mapping": mapping,
+        "valid_tombstoned_item_ids": valid_tombstoned_item_ids,
         "feed_parser": feed_parser_rows,
         "item_hash": item_hash_rows,
     }
@@ -381,30 +383,42 @@ def _timestamp_transform(*names):
     return transform
 
 
-def _target_tombstones(target):
-    report = {"valid": 0, "missing": 0, "ownership_mismatched": 0}
-    rows = target.execute("""
-        SELECT CASE
-            WHEN i.id IS NULL OR u.id IS NULL THEN 'missing'
-            WHEN f.user_id = d.user_id THEN 'valid'
-            ELSE 'ownership_mismatched' END AS category, count(*)
-        FROM pg_temp.legacy_deleted_items d
-        LEFT JOIN public.item i ON i.id = d.item_id
-        LEFT JOIN public.feed f ON f.id = i.feed_id
-        LEFT JOIN public.users u ON u.id = d.user_id
-        GROUP BY category
+def _item_transform(mapping, valid_tombstoned_item_ids):
+    def transform(row):
+        if row["id"] in valid_tombstoned_item_ids or row["feed_id"] not in mapping:
+            return None
+        row = remap_item(row, mapping)
+        row["date"] = normalize_timestamp(row["date"])
+        return row
+    return transform
+
+
+def _stage_valid_tombstoned_items(target, item_ids):
+    target.execute("""
+        CREATE TEMP TABLE legacy_valid_tombstoned_items (
+            item_id INTEGER PRIMARY KEY
+        ) ON COMMIT DROP
     """)
-    report.update(dict(rows))
-    deleted = target.execute("""
-        DELETE FROM public.item i
-        WHERE EXISTS (
-            SELECT 1 FROM pg_temp.legacy_deleted_items d
-            JOIN public.feed f ON f.id = i.feed_id
-            JOIN public.users u ON u.id = d.user_id
-            WHERE d.item_id = i.id AND f.user_id = d.user_id
+    _execute_many(
+        target,
+        "INSERT INTO pg_temp.legacy_valid_tombstoned_items (item_id) VALUES (%s)",
+        ((item_id,) for item_id in item_ids),
+    )
+
+
+def _verify_tombstone_exclusion(target, expected_count):
+    staged_count = target.execute(
+        "SELECT count(*) FROM pg_temp.legacy_valid_tombstoned_items"
+    ).fetchone()[0]
+    reached_target = target.execute("""
+        SELECT EXISTS (
+            SELECT 1
+            FROM public.item i
+            JOIN pg_temp.legacy_valid_tombstoned_items d ON d.item_id = i.id
         )
-    """).rowcount
-    return report, deleted
+    """).fetchone()[0]
+    if staged_count != expected_count or reached_target:
+        raise InspectionError("PostgreSQL tombstone exclusion verification failed.")
 
 
 def synchronize_sequences(target):
@@ -476,15 +490,17 @@ def execute_import(source, target):
     _execute_many(target, _insert_query("feed", TABLES["feed"]), [
         tuple(row[column] for column in TABLES["feed"]) for row in plan["feeds"]
     ])
-
-    def transform_item(row):
-        if row["feed_id"] not in plan["mapping"]:
-            return None
-        row = remap_item(row, plan["mapping"])
-        row["date"] = normalize_timestamp(row["date"])
-        return row
-
-    _copy_table(source, target, "item", TABLES["item"], transform_item)
+    valid_tombstoned_item_ids = plan["valid_tombstoned_item_ids"]
+    valid_tombstoned_item_id_set = frozenset(valid_tombstoned_item_ids)
+    _stage_valid_tombstoned_items(target, valid_tombstoned_item_ids)
+    _copy_table(
+        source,
+        target,
+        "item",
+        TABLES["item"],
+        _item_transform(plan["mapping"], valid_tombstoned_item_id_set),
+    )
+    _verify_tombstone_exclusion(target, len(valid_tombstoned_item_ids))
     _execute_many(target, _insert_query("feed_parser", TABLES["feed_parser"]), plan["feed_parser"])
     _execute_many(target, _insert_query("item_hash", TABLES["item_hash"]), plan["item_hash"])
 
@@ -494,23 +510,6 @@ def execute_import(source, target):
     if "refresh_tokens" in plan["present"]:
         _copy_table(source, target, "refresh_tokens", TABLES["refresh_tokens"],
                     _timestamp_transform("expires_at", "created_at"))
-
-    target.execute("""
-        CREATE TEMP TABLE legacy_deleted_items (
-            user_id INTEGER,
-            item_id INTEGER
-        ) ON COMMIT DROP
-    """)
-    if "deleted_items" in plan["present"]:
-        cursor = source.execute("SELECT user_id, item_id FROM deleted_items ORDER BY rowid")
-        for batch in _batches(cursor, LEGACY["deleted_items"]):
-            _execute_many(
-                target,
-                "INSERT INTO pg_temp.legacy_deleted_items (user_id, item_id) VALUES (%s, %s)", batch
-            )
-    tombstones, deleted_items = _target_tombstones(target)
-    if tombstones != source_report["tombstones"]:
-        raise InspectionError("PostgreSQL tombstone reconciliation failed.")
 
     actual = {}
     for table in TABLES:
@@ -526,7 +525,7 @@ def execute_import(source, target):
         "source": source_report,
         "target_before": initial_target,
         "target_after": actual,
-        "deleted_distinct_items": deleted_items,
+        "deleted_distinct_items": len(valid_tombstoned_item_ids),
         "transaction": "committed",
     }
 

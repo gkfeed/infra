@@ -28,9 +28,11 @@ The parser never deletes items. Deleting a feed cascades to its items in the
 database schema.
 
 `deleted_items` is legacy SQLite import data, not a table in the canonical
-`public` schema. The infra-owned importer stages tombstones temporarily in
-PostgreSQL, validates ownership, deletes matching imported items, reports
-invalid tombstones, and removes the staging table before cutover.
+`public` schema. The infra-owned importer validates tombstone ownership in its
+read-only SQLite transaction and excludes valid tombstoned items before
+PostgreSQL insertion. It stages the excluded IDs temporarily in PostgreSQL,
+verifies that none reached `public.item`, reports invalid tombstones, and
+removes the staging table before cutover.
 
 All legacy data conversion belongs to the infra-owned importer. This includes
 converting any remaining plaintext SQLite passwords into the target

@@ -121,8 +121,9 @@ class InspectionTests(unittest.TestCase):
     def test_counts_and_no_record_output(self):
         db = importer.open_source(self.path)
         self.addCleanup(db.close)
-        report = importer.inspect_source(db)
+        report, plan = importer.analyze_source(db)
         self.assertEqual(report['tombstones'], {'valid': 3, 'missing': 2, 'ownership_mismatched': 1})
+        self.assertEqual(plan['valid_tombstoned_item_ids'], (1, 2))
         self.assertEqual(report['passwords'], {'null': 1, 'legacy_plaintext': 1,
                                              'supported_argon2id': 1, 'malformed_or_unsupported': 0})
         self.assertEqual(report['other_table_count'], 0)
@@ -361,6 +362,7 @@ class InspectionTests(unittest.TestCase):
     def test_execute_commit_rollback_reconciliation_and_repeat_rejection(self):
         import psycopg
         from argon2 import PasswordHasher
+        from unittest.mock import patch
 
         url = os.environ['IMPORT_TEST_DATABASE_URL']
         tables = ', '.join(f'public."{table}"' for table in importer.TABLES)
@@ -415,6 +417,10 @@ class InspectionTests(unittest.TestCase):
                 (b'PRIVATE_ID', 1, 'PRIVATE_CREDENTIAL', 'PRIVATE_KEY_NAME',
                  '2024-01-01 00:00:00', None),
             )
+            db.execute(
+                'UPDATE item SET text = hex(randomblob(?)) WHERE id = 1',
+                (4 * 1024 * 1024,),
+            )
             db.execute('UPDATE item SET title = NULL WHERE id = 3')
 
         output, error = io.StringIO(), io.StringIO()
@@ -431,6 +437,23 @@ class InspectionTests(unittest.TestCase):
 
         with contextlib.closing(sqlite3.connect(self.path)) as db, db:
             db.execute("UPDATE item SET title = 'PRIVATE_TITLE_3' WHERE id = 3")
+
+        item_transform = importer._item_transform
+
+        def include_tombstoned_items(mapping, _ignored_item_ids):
+            return item_transform(mapping, frozenset())
+
+        with psycopg.connect(url) as db, contextlib.closing(
+            importer.open_source(self.path)
+        ) as source:
+            with patch.object(importer, '_item_transform', side_effect=include_tombstoned_items):
+                with self.assertRaisesRegex(
+                    importer.InspectionError,
+                    'tombstone exclusion verification failed',
+                ):
+                    importer.execute_import(source, db)
+            db.rollback()
+        empty_target()
 
         output = io.StringIO()
         with contextlib.redirect_stdout(output):
@@ -468,8 +491,11 @@ class InspectionTests(unittest.TestCase):
             ).fetchone()[0]
             self.assertTrue(PasswordHasher().verify(password, 'PRIVATE_PASSWORD'))
             self.assertIsNone(db.execute(
-                "SELECT to_regclass('public.legacy_deleted_items')"
+                "SELECT to_regclass('public.legacy_valid_tombstoned_items')"
             ).fetchone()[0])
+            self.assertLess(db.execute(
+                "SELECT pg_total_relation_size('public.item')"
+            ).fetchone()[0], 1024 * 1024)
 
         before = report['target_after']
         output, error = io.StringIO(), io.StringIO()

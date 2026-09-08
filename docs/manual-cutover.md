@@ -242,7 +242,7 @@ mappings.
    ```
 
    The first command must print `true`. Both diffs must produce no output and
-   exit zero. Record the displayed tombstone counts and distinct deleted-item
+   exit zero. Record the displayed tombstone counts and distinct tombstoned-item
    count in the private evidence.
 
 10. Confirm target counts and staging cleanup:
@@ -262,7 +262,7 @@ mappings.
        SELECT 1
        FROM pg_catalog.pg_class relation
        JOIN pg_catalog.pg_namespace namespace ON namespace.oid = relation.relnamespace
-       WHERE relation.relname = 'legacy_deleted_items'
+       WHERE relation.relname = 'legacy_valid_tombstoned_items'
    ) AS staging_absent;
    SQL
    ```
