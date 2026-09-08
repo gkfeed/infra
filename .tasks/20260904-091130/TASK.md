@@ -1,6 +1,6 @@
 # I11A — Clean up bootstrap-only agent instructions
 
-- STATUS: PENDING
+- STATUS: DONE
 - PRIORITY: 2
 - DEPENDS: [I11](../20260904-0911/TASK.md)
 
@@ -12,18 +12,28 @@ and migration work.
 
 ## Plan
 
-- [ ] Audit every `AGENTS.md` rule after the I11 rehearsal.
-- [ ] Remove or rewrite task-roadmap and repository-bootstrap instructions that
+- [x] Audit every `AGENTS.md` rule after the I11 rehearsal.
+- [x] Remove or rewrite task-roadmap and repository-bootstrap instructions that
       no longer apply.
-- [ ] Retain enduring schema ownership, migration safety, application boundary,
+- [x] Retain enduring schema ownership, migration safety, application boundary,
       privilege, and secret-handling rules.
-- [ ] Keep the detailed migration policy in `docs/migrations.md`; avoid copying
+- [x] Keep the detailed migration policy in `docs/migrations.md`; avoid copying
       procedural detail into `AGENTS.md` when a concise invariant is enough.
-- [ ] Keep temporary importer guidance only while the importer still exists.
-- [ ] Do not change migrations, schema objects, privileges, importer code, or
+- [x] Keep temporary importer guidance only while the importer still exists.
+- [x] Do not change migrations, schema objects, privileges, importer code, or
       application code in this task.
 
 ## Definition of done
 
 A new agent sees only actionable, current repository instructions in
 `AGENTS.md`, while permanent safety rules and links to detailed policy remain.
+
+## Validation
+
+Audited every rule after the I11 rehearsal. Removed the bootstrap task-roadmap
+workflow, retained the repository and application boundaries, and made the
+least-privilege role rules explicit. Detailed migration and role procedures
+remain in `docs/migrations.md` and `docs/application-roles.md`. The temporary
+importer guidance remains while `legacy-import/` exists. `git diff --check` and
+`make help` passed. No migration, schema, privilege, importer, or application
+code changed.
