@@ -10,13 +10,16 @@ DBMATE = docker run --rm --network=host \
 
 .DEFAULT_GOAL := help
 
-.PHONY: help migrate status new dump
+.PHONY: help migrate status new dump postgres-config postgres-up postgres-stop
 
 help: ## Show available commands
 	@echo "make migrate              Apply pending migrations"
 	@echo "make status               Show migration status"
 	@echo "make new NAME=add_example Create a migration"
 	@echo "make dump                 Write db/schema.sql"
+	@echo "make postgres-config      Validate production Compose"
+	@echo "make postgres-up          Start production PostgreSQL"
+	@echo "make postgres-stop        Stop production PostgreSQL"
 
 migrate: ## Apply pending migrations with strict ordering
 	@$(DBMATE) migrate --strict
@@ -29,6 +32,15 @@ new: check-name ## Create a timestamped migration (NAME=...)
 
 dump: ## Write the current schema to db/schema.sql
 	@$(DBMATE) dump
+
+postgres-config: ## Validate the production Compose file and environment
+	@docker compose --env-file .env config --quiet
+
+postgres-up: ## Start production PostgreSQL and wait for health
+	@docker compose --env-file .env up -d --wait postgres
+
+postgres-stop: ## Stop PostgreSQL without deleting its data
+	@docker compose --env-file .env stop postgres
 
 .PHONY: check-name
 

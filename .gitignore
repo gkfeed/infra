@@ -1,6 +1,12 @@
 # Local secrets and environment overrides
 .env
 .env.*
+!.env.example
+!.env.rehearsal-source.example
+!.env.rehearsal-restore.example
+
+# Private database transfer artifacts
+artifacts/
 
 # Editor and operating-system files
 *.swp

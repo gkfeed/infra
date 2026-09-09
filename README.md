@@ -58,6 +58,11 @@ requirements, and executable privilege smoke checks.
 Follow [the manual cutover runbook](docs/manual-cutover.md) for the one-time
 production transfer.
 
+Use [the PostgreSQL container guide](docs/container-postgres.md) to run the
+production database from this repository. If the operator cannot connect the
+importer directly to the server, follow the rehearsed
+[offline dump transfer](docs/offline-dump-transfer.md).
+
 The temporary [SQLite importer](legacy-import/README.md) supports read-only
 inspection and the controlled one-time transfer into an empty PostgreSQL
 target.

@@ -1,0 +1,28 @@
+name: gkfeed-infra
+
+services:
+  postgres:
+    image: postgres:17.10-bookworm
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-gkfeed}
+      POSTGRES_USER: ${POSTGRES_USER:-gkfeed_owner}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+    ports:
+      - "127.0.0.1:${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - "${POSTGRES_DATA_DIR:-/srv/gkfeed/postgres/17/data}:/var/lib/postgresql/data"
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - pg_isready -U "$${POSTGRES_USER}" -d "$${POSTGRES_DB}"
+      interval: 5s
+      timeout: 5s
+      retries: 12
+      start_period: 10s
+    stop_grace_period: 1m
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "5"

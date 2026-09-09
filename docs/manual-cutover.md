@@ -4,6 +4,11 @@ This runbook moves production data once. A designated operator performs each
 step. This repository does not deploy applications or store application
 passwords.
 
+This runbook imports directly into the new production database. When the
+operator must carry a PostgreSQL archive to the server instead, use the
+[offline dump transfer](offline-dump-transfer.md). Do not mix steps from both
+procedures.
+
 Use a private shell with history disabled or a secret manager for connection
 URLs. Do not put connection URLs, passwords, the SQLite snapshot, or importer
 reports in Git. The importer report contains production-derived feed ID
