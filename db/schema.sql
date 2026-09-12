@@ -318,4 +318,5 @@ ALTER TABLE ONLY public.webauthn_credentials
 
 INSERT INTO public.schema_migrations (version) VALUES
     ('20260904184133'),
-    ('20260905082946');
+    ('20260905082946'),
+    ('20260911093048');

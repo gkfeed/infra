@@ -1,4 +1,4 @@
-# I14: Add production backup and restore operations
+# I14: Add hourly PostgreSQL backups to Telegram
 
 - STATUS: PENDING
 - PRIORITY: 1
@@ -6,28 +6,74 @@
 
 ## Goal
 
-Add tested, monitored backups for the PostgreSQL container after the one-time
-cutover workflow is accepted.
+Replace the legacy hourly SQLite export with a PostgreSQL 17 backup owned by
+this repository. Keep a complete logical dump off-host in Telegram and provide
+a tested manual recovery path.
+
+The agreed recovery targets are an RPO of one hour and an RTO of four hours.
+
+## Accepted constraints
+
+- Telegram is the only off-host destination and keeps messages without
+  automated retention.
+- Backups are not encrypted before upload. Telegram Bot API chats do not
+  provide end-to-end encryption, so Telegram and anyone with the bot token can
+  access the database archive.
+- Restore is manual. There is no scheduled restore rehearsal after the initial
+  local validation.
+- The production cron entry and LOGIN identity are operator-managed and remain
+  outside Git.
 
 ## Plan
 
-- [ ] Agree on RPO, schedule, retention, and restore-test cadence.
-- [ ] Choose an encrypted off-host destination and a separate backup
-      credential.
-- [ ] Create PostgreSQL 17 logical custom dumps with checksums in a private
-      host directory.
-- [ ] Automate retention without deleting the last known-good backup.
-- [ ] Alert the operator when creation, upload, verification, or retention
-      fails.
-- [ ] Restore a backup into a clean disposable cluster on a fixed schedule.
-- [ ] Document disaster recovery and record measured restore time.
+- [x] Agree on an hourly schedule, one-hour RPO, four-hour RTO, Telegram
+      storage, no automatic retention, and one initial restore test.
+- [x] Add a least-privilege `gkfeed_backup NOLOGIN` group role through a
+      forward migration. The operator creates its LOGIN identity outside Git.
+- [x] Create a complete PostgreSQL 17 custom dump with no owners or ACLs.
+- [x] Verify the archive TOC and record its size and SHA-256 in a commit
+      manifest.
+- [x] Split archives into payloads no larger than 45,000,000 bytes and send the
+      manifest only after every payload reaches Telegram.
+- [x] Keep failed uploads in a private host spool and resume them on the next
+      run. Never delete an uncommitted backup automatically.
+- [x] Refuse to create another archive when the spool filesystem has less than
+      5 GiB free.
+- [x] Provide a minute-five cron entry using `flock` and report failures to
+      syslog, cron output, and Telegram when Telegram remains reachable.
+- [x] Document server setup and manual recovery into a clean migrated
+      PostgreSQL 17 database.
+- [x] Restore a fresh production archive into a disposable PostgreSQL 17 on the
+      operator workstation, verify table counts, record the elapsed time, and
+      remove the local production data afterward.
+- [ ] Install and verify the production cron entry after I13 is complete.
 
 ## Definition of done
 
-A scheduled backup reaches off-host storage, failures notify the operator, and
-a clean restore test proves the documented recovery procedure.
+An hourly production run creates a complete custom archive, sends every
+payload and its final manifest to Telegram, and removes local data only after
+Telegram confirms the manifest. Failures leave a resumable local copy and
+notify the operator. A clean local restore proves the documented manual
+procedure within the four-hour RTO.
 
 ## Validation
 
-Complete after I13 and before treating the container as a backed-up production
-service.
+Keep this task pending until I13 is done and an operator installs the merged
+migration, private environment file, separate LOGIN identity, and cron entry
+on production. Record the first production manifest and cron result without
+recording credentials, connection URLs, chat IDs, or database contents.
+
+The three migrations applied in strict order to disposable PostgreSQL 17, and
+both application and backup role checks passed. A fresh production archive was
+restored into a migrated local source, backed up through the new script, and
+restored into a second clean migrated cluster. The seven table counts and four
+sequence states matched. The clean restore took three seconds, well inside the
+four-hour RTO.
+
+The upload test forced one-megabyte parts, producing 19 payloads. The manifest
+was sent last and the successful queue was removed. A second test rejected the
+third payload: the complete backup remained pending with two sent markers, and
+the next run resumed it and emptied the queue. A repeated restore into the
+populated target was rejected. A separate fixture round trip covered the normal
+single-document path. All temporary containers, archives, restored data,
+credentials, and fake Telegram output were removed after validation.

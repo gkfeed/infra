@@ -2,6 +2,7 @@
 .env
 .env.*
 !.env.example
+!.env.backup.example
 !.env.rehearsal-source.example
 !.env.rehearsal-restore.example
 

@@ -110,5 +110,6 @@ docker compose --project-name gkfeed-transfer-restore \
   -f compose.yaml -f compose.rehearsal.yaml stop postgres
 ```
 
-Compose does not provide ongoing backups. Task I14 tracks backup scheduling,
-retention, off-host storage, alerts, and periodic restore tests.
+Compose does not schedule backups. The Russian
+[PostgreSQL backup runbook](postgres-backups.ru.md) documents the hourly
+Telegram backup, private retry spool, alerts, and manual restore procedure.

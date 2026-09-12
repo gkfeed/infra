@@ -47,6 +47,23 @@ No default grants cover future tables or sequences. Each migration must grant
 only the access its consumers require. The dbmate schema dump omits role
 creation and ACLs, so provision through migrations, not `db/schema.sql` alone.
 
+## Backup role
+
+Migration `20260911093048` creates `gkfeed_backup` as a separate NOLOGIN group.
+It has CONNECT and schema USAGE plus SELECT on every current table and sequence.
+It cannot change data, advance sequences, create temporary objects, or perform
+DDL. Operators create its LOGIN identity and password outside Git.
+
+Run the backup role check only against a disposable migrated database:
+
+```sh
+psql "$DATABASE_URL" -X -v ON_ERROR_STOP=1 -f checks/backup_role.sql
+```
+
+The check confirms every required read and rejects writes, sequence changes,
+temporary objects, and DDL. Every migration that adds a backed-up table or
+sequence must explicitly grant its read access to `gkfeed_backup`.
+
 ## Smoke checks
 
 Use a clean disposable PostgreSQL instance and an operator connection in

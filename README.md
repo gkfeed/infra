@@ -63,6 +63,9 @@ production database from this repository. If the operator cannot connect the
 importer directly to the server, follow the rehearsed
 [offline dump transfer](docs/offline-dump-transfer.md).
 
+Follow [the PostgreSQL backup runbook](docs/postgres-backups.ru.md) to install
+the hourly Telegram backup and perform a manual restore.
+
 The temporary [SQLite importer](legacy-import/README.md) supports read-only
 inspection and the controlled one-time transfer into an empty PostgreSQL
 target.
