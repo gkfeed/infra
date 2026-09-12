@@ -46,7 +46,7 @@ The agreed recovery targets are an RPO of one hour and an RTO of four hours.
 - [x] Restore a fresh production archive into a disposable PostgreSQL 17 on the
       operator workstation, verify table counts, record the elapsed time, and
       remove the local production data afterward.
-- [ ] Install and verify the production cron entry after I13 is complete.
+- [x] Install and verify the production cron entry.
 
 ## Definition of done
 
@@ -58,10 +58,20 @@ procedure within the four-hour RTO.
 
 ## Validation
 
-Keep this task pending until I13 is done and an operator installs the merged
-migration, private environment file, separate LOGIN identity, and cron entry
-on production. Record the first production manifest and cron result without
+Keep this task pending until I13 is done. Record production results without
 recording credentials, connection URLs, chat IDs, or database contents.
+
+On 2026-09-12 the operator applied migration `20260911093048`, provisioned the
+private environment and separate `gkfeed_backup_login` identity, and installed
+the minute-five cron entry. The initial manual run committed
+`gkfeed-20260912T101827Z`: a 95,645,407-byte archive split into three payloads
+with its manifest sent last. The local pending queue was empty afterward.
+
+The first four scheduled runs at 11:05, 12:05, 13:05, and 14:05 UTC all
+committed their Telegram manifests and completed without logged errors. The
+pending queue remained empty. The legacy SQLite backup cron entry was removed,
+no legacy backup process remained, and the cron service was active with exactly
+one PostgreSQL backup entry.
 
 The three migrations applied in strict order to disposable PostgreSQL 17, and
 both application and backup role checks passed. A fresh production archive was
