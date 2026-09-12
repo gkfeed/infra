@@ -2,13 +2,12 @@
 
 - STATUS: PENDING
 - PRIORITY: 1
-- DEPENDS: [I13](../20260908-150926/TASK.md)
+- DEPENDS: none
 
 ## Goal
 
-Replace the legacy hourly SQLite export with a PostgreSQL 17 backup owned by
-this repository. Keep a complete logical dump off-host in Telegram and provide
-a tested manual recovery path.
+Run the PostgreSQL 17 backup owned by this repository. Keep a complete logical
+dump off-host in Telegram and provide a tested manual recovery path.
 
 The agreed recovery targets are an RPO of one hour and an RTO of four hours.
 
@@ -58,8 +57,8 @@ procedure within the four-hour RTO.
 
 ## Validation
 
-Keep this task pending until I13 is done. Record production results without
-recording credentials, connection URLs, chat IDs, or database contents.
+Record production results without recording credentials, connection URLs,
+chat IDs, or database contents.
 
 On 2026-09-12 the operator applied migration `20260911093048`, provisioned the
 private environment and separate `gkfeed_backup_login` identity, and installed

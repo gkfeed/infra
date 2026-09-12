@@ -38,9 +38,3 @@ Applications consume this contract but do not execute DDL.
   Git. See `docs/application-roles.md`.
 - Do not commit passwords, LOGIN roles, real connection strings, `.env`, or
   other secrets.
-
-## Legacy import
-
-The one-time SQLite importer is a temporary cutover exception. Keep it isolated
-from the permanent PostgreSQL contract and remove it in a separate final task
-after the cutover is confirmed. Preserve the SQL migration history.

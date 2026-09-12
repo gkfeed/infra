@@ -119,5 +119,3 @@ missing, keep the old column.
 - Infra migrations contain schema and privilege changes, not application code.
 - Required backfills must be explicit, bounded, and reviewed. Routine data
   changes do not belong in migrations.
-- Keep the temporary SQLite importer separate from PostgreSQL migration
-  history.

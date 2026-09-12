@@ -53,7 +53,7 @@ changes in the parser and API repositories, not in the infra repository.
       Compose labels that both config files were used and that API and parser
       services share `gkfeed-infra_default` with PostgreSQL.
 - [ ] Confirm that parser resolves `postgres`, dispatcher remains running, and
-      the API and parser PostgreSQL smoke checks required by I13 pass.
+      the API and parser PostgreSQL smoke checks pass.
 - [ ] Remove reliance on the old ignored server-only overlays after the tracked
       deployment is verified.
 
@@ -62,8 +62,7 @@ changes in the parser and API repositories, not in the infra repository.
 A push to `master` in either application repository recreates its production
 containers from the tracked base and production Compose files. No production
 topology exists only on the server. API and parser connect to the PostgreSQL
-service through `gkfeed-infra_default`, and the final I13 application smoke
-checks pass.
+service through `gkfeed-infra_default`, and the application smoke checks pass.
 
 ## Validation
 

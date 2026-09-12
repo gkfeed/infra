@@ -83,7 +83,7 @@ only SQLSTATE `42501`, insufficient privilege, as an expected denial. Any
 unexpected success or other SQL error fails the check.
 
 The script exercises every allowed table operation, including generated IDs,
-parser state upsert, legacy hash assignment, API item deletion, and feed
+parser state upsert, hash feed assignment, API item deletion, and feed
 cascades. It also checks forbidden writes, access to the other application's
 private tables, sequence resets, registry writes, table alteration and removal,
 TRUNCATE, and permanent and temporary object creation. Both roles must remain

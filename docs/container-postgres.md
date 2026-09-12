@@ -42,8 +42,7 @@ make migrate
 make status
 ```
 
-The final status must show migrations `20260904184133` and `20260905082946`
-with nothing pending. Then follow [offline dump transfer](offline-dump-transfer.md).
+The final status must show no pending migrations.
 
 ## Application logins
 
@@ -61,54 +60,6 @@ CREATE ROLE gkfeed_parser_login LOGIN INHERIT NOSUPERUSER NOCREATEDB
 
 Use `GKFEED_DATABASE_URL` for API and `DB_URL` for parser. Each URL must name
 its LOGIN role, not `gkfeed_owner`.
-
-## Rehearsal overlay
-
-`compose.rehearsal.yaml` replaces the production bind mount with a disposable
-named volume and disables automatic restart. The transfer rehearsal uses two
-separate PostgreSQL clusters because the application group roles are
-cluster-wide and the role migration must run independently on both targets.
-
-The rehearsal requires Bash, Docker Compose, GNU Make and coreutils, SQLite's
-`sqlite3` CLI, `jq`, and the Python environment described in
-[the importer README](../legacy-import/README.md).
-
-Copy the two examples and set private local passwords:
-
-```sh
-cp .env.rehearsal-source.example .env.rehearsal-source
-cp .env.rehearsal-restore.example .env.rehearsal-restore
-chmod 0600 .env.rehearsal-source .env.rehearsal-restore
-```
-
-Run the complete rehearsal:
-
-```sh
-scripts/rehearse-dump-transfer.sh \
-  /private/path/gkfeed.sqlite \
-  /private/path/gkfeed-data.dump
-```
-
-The script imports into the source cluster, creates the dump, restores it into
-the second migrated cluster, and compares every table and sequence. It stops
-the source container and leaves the restored database running.
-
-For local application checks, read the passwords from
-`.env.rehearsal-restore` and use:
-
-```dotenv
-GKFEED_DATABASE_URL=postgres://gkfeed_api_login:<API_LOGIN_PASSWORD>@127.0.0.1:55435/gkfeed?sslmode=disable
-DB_URL=postgresql://gkfeed_parser_login:<PARSER_LOGIN_PASSWORD>@127.0.0.1:55435/gkfeed?sslmode=disable
-```
-
-Do not remove the rehearsal volume until both applications pass their smoke
-tests. The operator may stop the container without deleting data:
-
-```sh
-docker compose --project-name gkfeed-transfer-restore \
-  --env-file .env.rehearsal-restore \
-  -f compose.yaml -f compose.rehearsal.yaml stop postgres
-```
 
 Compose does not schedule backups. The Russian
 [PostgreSQL backup runbook](postgres-backups.ru.md) documents the hourly
