@@ -41,7 +41,8 @@ BEGIN
 
     FOREACH table_name IN ARRAY ARRAY[
         'schema_migrations', 'users', 'feed', 'item', 'feed_parser',
-        'item_hash', 'webauthn_credentials', 'refresh_tokens'
+        'item_hash', 'webauthn_credentials', 'refresh_tokens',
+        'item_changes'
     ] LOOP
         IF NOT has_table_privilege('gkfeed_backup', 'public.' || table_name, 'SELECT')
            OR has_table_privilege(
@@ -53,7 +54,8 @@ BEGIN
     END LOOP;
 
     FOREACH sequence_name IN ARRAY ARRAY[
-        'users_id_seq', 'feed_id_seq', 'item_id_seq', 'item_hash_id_seq'
+        'users_id_seq', 'feed_id_seq', 'item_id_seq', 'item_hash_id_seq',
+        'item_changes_id_seq'
     ] LOOP
         IF NOT has_sequence_privilege(
                 'gkfeed_backup', 'public.' || sequence_name, 'SELECT'
@@ -77,10 +79,12 @@ SELECT * FROM public.feed_parser;
 SELECT * FROM public.item_hash;
 SELECT * FROM public.webauthn_credentials;
 SELECT * FROM public.refresh_tokens;
+SELECT * FROM public.item_changes;
 SELECT last_value FROM public.users_id_seq;
 SELECT last_value FROM public.feed_id_seq;
 SELECT last_value FROM public.item_id_seq;
 SELECT last_value FROM public.item_hash_id_seq;
+SELECT last_value FROM public.item_changes_id_seq;
 
 SELECT pg_temp.expect_denied('INSERT INTO public.users (name) VALUES (''forbidden'')');
 SELECT pg_temp.expect_denied('UPDATE public.feed SET title = title');

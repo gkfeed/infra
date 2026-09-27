@@ -14,8 +14,15 @@ group roles. Their grants follow [parser](../contracts/parser.md) and
 | `item_hash` | SELECT, INSERT, UPDATE of `feed_id` | None |
 | `webauthn_credentials` | None | SELECT, INSERT, UPDATE, DELETE |
 | `refresh_tokens` | None | SELECT, INSERT, DELETE |
+| `item_changes` | None | SELECT |
 | `item_id_seq`, `item_hash_id_seq` | USAGE | None |
 | `feed_id_seq` | None | USAGE |
+
+Migration `20260927071753` adds the `item_changes` read grant to `gkfeed_api`
+and `gkfeed_backup`. The backup role can also read `item_changes_id_seq`.
+Neither application role can write change rows or use the new identity
+sequence. Security-definer triggers write the rows when items change or a feed
+is deleted.
 
 Both roles have USAGE on `public`. Sequence USAGE permits generated IDs but
 not `setval`. User provisioning remains an operator responsibility, so neither
@@ -75,6 +82,8 @@ make migrate
 make status
 make dump
 psql "$DATABASE_URL" -X -v ON_ERROR_STOP=1 -f checks/application_roles.sql
+psql "$DATABASE_URL" -X -v ON_ERROR_STOP=1 -f checks/item_changes.sql
+python checks/item_changes_concurrency.py
 ```
 
 The operator must be able to `SET ROLE` to both application groups and create a
@@ -89,6 +98,11 @@ private tables, sequence resets, registry writes, table alteration and removal,
 TRUNCATE, and permanent and temporary object creation. Both roles must remain
 NOLOGIN without elevated attributes. Success ends with
 `Application role smoke checks passed.`
+
+The item change check covers payloads, direct and cascade tombstones, user
+isolation, and read-only grants. The concurrency check requires psycopg 3 and
+uses two transactions to verify that a later change for one user waits for the
+earlier transaction to commit.
 
 Validated on disposable PostgreSQL 17 with dbmate 2.35.1. Both migrations were
 applied, `make status` reported zero pending migrations, and all smoke checks
