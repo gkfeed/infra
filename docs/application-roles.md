@@ -14,6 +14,7 @@ group roles. Their grants follow [parser](../contracts/parser.md) and
 | `item_hash` | SELECT, INSERT, UPDATE of `feed_id` | None |
 | `webauthn_credentials` | None | SELECT, INSERT, UPDATE, DELETE |
 | `refresh_tokens` | None | SELECT, INSERT, DELETE |
+| `browser_sessions` | None | SELECT, INSERT, UPDATE, DELETE |
 | `item_changes` | None | SELECT |
 | `item_id_seq`, `item_hash_id_seq` | USAGE | None |
 | `feed_id_seq` | None | USAGE |
@@ -23,6 +24,11 @@ and `gkfeed_backup`. The backup role can also read `item_changes_id_seq`.
 Neither application role can write change rows or use the new identity
 sequence. Security-definer triggers write the rows when items change or a feed
 is deleted.
+
+Migration `20261012101552` adds browser sessions. The API needs `UPDATE` to
+renew activity; its `refresh_tokens` privileges remain SELECT, INSERT, DELETE.
+The backup role receives SELECT on `browser_sessions`. The table adds no
+sequence, and neither application role owns it.
 
 Both roles have USAGE on `public`. Sequence USAGE permits generated IDs but
 not `setval`. User provisioning remains an operator responsibility, so neither
@@ -83,6 +89,8 @@ make status
 make dump
 psql "$DATABASE_URL" -X -v ON_ERROR_STOP=1 -f checks/application_roles.sql
 psql "$DATABASE_URL" -X -v ON_ERROR_STOP=1 -f checks/item_changes.sql
+psql "$DATABASE_URL" -X -v ON_ERROR_STOP=1 -f checks/browser_sessions.sql
+psql "$DATABASE_URL" -X -v ON_ERROR_STOP=1 -f checks/backup_role.sql
 python checks/item_changes_concurrency.py
 ```
 
@@ -104,6 +112,10 @@ isolation, and read-only grants. The concurrency check requires psycopg 3 and
 uses two transactions to verify that a later change for one user waits for the
 earlier transaction to commit.
 
-Validated on disposable PostgreSQL 17 with dbmate 2.35.1. Both migrations were
-applied, `make status` reported zero pending migrations, and all smoke checks
-passed.
+The browser session check runs API queries under `gkfeed_api`, verifies digest
+and timestamp constraints, user foreign keys and deletion restrictions, and
+checks expiry, logout, role ownership, and DDL denials.
+
+Validated on disposable PostgreSQL 17.10 with dbmate 2.35.1 through migration
+`20261012101552`. `make status` reported five applied migrations and zero
+pending migrations, and all smoke checks passed.
