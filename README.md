@@ -55,6 +55,9 @@ ordering, the forward-only workflow, manual execution, the
 See [application roles](docs/application-roles.md) for the grants, operator
 requirements, and executable privilege smoke checks.
 
+See [the browser session rollout](docs/browser-sessions.md) for the database
+prerequisite for API PR #7, release ordering, and expired-session maintenance.
+
 Use [the PostgreSQL container guide](docs/container-postgres.md) to run the
 production database from this repository.
 
