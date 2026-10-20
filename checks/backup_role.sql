@@ -42,7 +42,7 @@ BEGIN
     FOREACH table_name IN ARRAY ARRAY[
         'schema_migrations', 'users', 'feed', 'item', 'feed_parser',
         'item_hash', 'webauthn_credentials', 'refresh_tokens',
-        'item_changes'
+        'item_changes', 'browser_sessions'
     ] LOOP
         IF NOT has_table_privilege('gkfeed_backup', 'public.' || table_name, 'SELECT')
            OR has_table_privilege(
@@ -80,6 +80,7 @@ SELECT * FROM public.item_hash;
 SELECT * FROM public.webauthn_credentials;
 SELECT * FROM public.refresh_tokens;
 SELECT * FROM public.item_changes;
+SELECT * FROM public.browser_sessions;
 SELECT last_value FROM public.users_id_seq;
 SELECT last_value FROM public.feed_id_seq;
 SELECT last_value FROM public.item_id_seq;
@@ -89,6 +90,9 @@ SELECT last_value FROM public.item_changes_id_seq;
 SELECT pg_temp.expect_denied('INSERT INTO public.users (name) VALUES (''forbidden'')');
 SELECT pg_temp.expect_denied('UPDATE public.feed SET title = title');
 SELECT pg_temp.expect_denied('DELETE FROM public.item');
+SELECT pg_temp.expect_denied('INSERT INTO public.browser_sessions DEFAULT VALUES');
+SELECT pg_temp.expect_denied('UPDATE public.browser_sessions SET last_seen_at = now()');
+SELECT pg_temp.expect_denied('DELETE FROM public.browser_sessions');
 SELECT pg_temp.expect_denied('TRUNCATE public.item_hash');
 SELECT pg_temp.expect_denied('SELECT nextval(''public.item_id_seq'')');
 SELECT pg_temp.expect_denied('SELECT setval(''public.item_id_seq'', 1)');

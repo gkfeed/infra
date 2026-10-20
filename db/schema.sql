@@ -1,6 +1,6 @@
 \restrict dbmate
 
--- Dumped from database version 17.10
+-- Dumped from database version 17.10 (Debian 17.10-1.pgdg12+1)
 -- Dumped by pg_dump version 18.6
 
 SET statement_timeout = 0;
@@ -79,6 +79,22 @@ $$;
 SET default_tablespace = '';
 
 SET default_table_access_method = heap;
+
+--
+-- Name: browser_sessions; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.browser_sessions (
+    token_hash bytea NOT NULL,
+    user_id integer NOT NULL,
+    created_at timestamp with time zone NOT NULL,
+    last_seen_at timestamp with time zone NOT NULL,
+    expires_at timestamp with time zone NOT NULL,
+    CONSTRAINT browser_sessions_check CHECK ((last_seen_at >= created_at)),
+    CONSTRAINT browser_sessions_check1 CHECK ((expires_at > created_at)),
+    CONSTRAINT browser_sessions_token_hash_check CHECK ((octet_length(token_hash) = 32))
+);
+
 
 --
 -- Name: feed; Type: TABLE; Schema: public; Owner: -
@@ -258,6 +274,14 @@ CREATE TABLE public.webauthn_credentials (
 
 
 --
+-- Name: browser_sessions browser_sessions_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.browser_sessions
+    ADD CONSTRAINT browser_sessions_pkey PRIMARY KEY (token_hash);
+
+
+--
 -- Name: feed_parser feed_parser_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -354,6 +378,20 @@ ALTER TABLE ONLY public.webauthn_credentials
 
 
 --
+-- Name: browser_sessions_expires_at_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX browser_sessions_expires_at_idx ON public.browser_sessions USING btree (expires_at);
+
+
+--
+-- Name: browser_sessions_user_id_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX browser_sessions_user_id_idx ON public.browser_sessions USING btree (user_id);
+
+
+--
 -- Name: item_changes_user_id_id_idx; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -372,6 +410,14 @@ CREATE TRIGGER feed_items_before_delete BEFORE DELETE ON public.feed FOR EACH RO
 --
 
 CREATE TRIGGER item_change_after_write AFTER INSERT OR DELETE OR UPDATE ON public.item FOR EACH ROW EXECUTE FUNCTION public.record_item_change();
+
+
+--
+-- Name: browser_sessions browser_sessions_user_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.browser_sessions
+    ADD CONSTRAINT browser_sessions_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id) ON DELETE RESTRICT;
 
 
 --
@@ -437,4 +483,5 @@ INSERT INTO public.schema_migrations (version) VALUES
     ('20260904184133'),
     ('20260905082946'),
     ('20260911093048'),
-    ('20260927071753');
+    ('20260927071753'),
+    ('20261012101552');
