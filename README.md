@@ -58,6 +58,9 @@ requirements, and executable privilege smoke checks.
 See [the browser session rollout](docs/browser-sessions.md) for the database
 prerequisite for API PR #7, release ordering, and expired-session maintenance.
 
+See [the item feed index](docs/item-feed-index.md) for lookup measurements and
+the index build's operational impact.
+
 Use [the PostgreSQL container guide](docs/container-postgres.md) to run the
 production database from this repository.
 

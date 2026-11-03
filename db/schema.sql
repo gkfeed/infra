@@ -399,6 +399,13 @@ CREATE INDEX item_changes_user_id_id_idx ON public.item_changes USING btree (use
 
 
 --
+-- Name: item_feed_id_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX item_feed_id_idx ON public.item USING btree (feed_id);
+
+
+--
 -- Name: feed feed_items_before_delete; Type: TRIGGER; Schema: public; Owner: -
 --
 
@@ -484,4 +491,5 @@ INSERT INTO public.schema_migrations (version) VALUES
     ('20260905082946'),
     ('20260911093048'),
     ('20260927071753'),
-    ('20261012101552');
+    ('20261012101552'),
+    ('20261103072958');
