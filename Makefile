@@ -2,11 +2,11 @@ DBMATE_VERSION := 2.35.1
 DBMATE_IMAGE := ghcr.io/amacneil/dbmate:$(DBMATE_VERSION)
 export NAME
 
-# Call with ro for operator commands and rw for artifact authoring.
 DBMATE = docker run --rm --network=host \
 	--user "$$(id -u):$$(id -g)" \
-	-v "$(CURDIR):/work:$(1)" -w /work \
+	-v "$(CURDIR):/work" -w /work \
 	-e DATABASE_URL -e DBMATE_STRICT=true \
+	--entrypoint /work/scripts/dbmate.sh \
 	$(DBMATE_IMAGE)
 
 .DEFAULT_GOAL := help
@@ -14,7 +14,7 @@ DBMATE = docker run --rm --network=host \
 .PHONY: help migrate status new dump postgres-config postgres-up postgres-stop
 
 help: ## Show available commands
-	@echo "make migrate              Apply pending migrations without writing a dump"
+	@echo "make migrate              Apply pending migrations"
 	@echo "make status               Show migration status"
 	@echo "make new NAME=add_example Create a migration"
 	@echo "make dump                 Write db/schema.sql"
@@ -22,17 +22,17 @@ help: ## Show available commands
 	@echo "make postgres-up          Start production PostgreSQL"
 	@echo "make postgres-stop        Stop production PostgreSQL"
 
-migrate: ## Apply pending migrations with strict ordering, without changing tracked files
-	@$(call DBMATE,ro) --no-dump-schema migrate --strict
+migrate: ## Apply pending migrations with strict ordering
+	@$(DBMATE) migrate --strict
 
 status: ## Show migration status
-	@$(call DBMATE,ro) status
+	@$(DBMATE) status
 
 new: check-name ## Create a timestamped migration (NAME=...)
-	@$(call DBMATE,rw) new "$$NAME"
+	@$(DBMATE) new "$$NAME"
 
 dump: ## Write the current schema to db/schema.sql
-	@$(call DBMATE,rw) dump
+	@$(DBMATE) dump
 
 postgres-config: ## Validate the production Compose file and environment
 	@docker compose --env-file .env config --quiet

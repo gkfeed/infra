@@ -47,16 +47,6 @@ Every dbmate invocation enables strict mode. Migrations live in
 `db/migrations/`, and the current dump is written to `db/schema.sql`. Do not
 commit connection strings, passwords, or `.env` files.
 
-`make migrate` and `make status` mount the repository read-only. `make new`
-and `make dump` have write access to create migration and schema artifacts.
-Run `make dump` explicitly after testing a migration and include the result
-in its PR. CI rebuilds the schema on disposable PostgreSQL 17.10-bookworm and
-fails if the committed dump differs. On production, use
-`make status`, `make migrate`, and `make status` without `make dump` so the
-checkout stays clean for the next update. See the
-[checkout recovery steps](docs/migrations.md#recover-a-production-checkout)
-if a previous migration left `db/schema.sql` modified.
-
 Before authoring or applying a migration, read the
 [migration policy](docs/migrations.md). It defines migration naming and
 ordering, the forward-only workflow, manual execution, the

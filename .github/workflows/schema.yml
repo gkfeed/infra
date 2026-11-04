@@ -12,9 +12,12 @@ jobs:
   schema:
     runs-on: ubuntu-24.04
     timeout-minutes: 10
+    strategy:
+      matrix:
+        postgres: ["17.10-bookworm", "17.10-alpine"]
     services:
       postgres:
-        image: postgres:17.10-bookworm
+        image: postgres:${{ matrix.postgres }}
         env:
           POSTGRES_USER: gkfeed_owner
           POSTGRES_DB: gkfeed
@@ -32,13 +35,15 @@ jobs:
       - uses: actions/checkout@v6
         with:
           persist-credentials: false
-      - name: Apply migrations without changing the checkout
+      - name: Check dump header normalization
+        run: python3 checks/schema_dump.py
+      - name: Verify automatic schema dumps after migrations
         run: |
           make status
           make migrate
           make status
           make migrate
-          git diff --exit-code
+          git diff --exit-code -- db/schema.sql
       - name: Verify the committed schema against a fresh database
         run: |
           make dump

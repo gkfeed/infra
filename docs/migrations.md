@@ -40,23 +40,24 @@ make dump
 ```
 
 - Include the updated `db/schema.sql` in the migration PR.
-- `make migrate` disables dbmate's automatic schema dump. Only `make dump`
-  writes `db/schema.sql`; run it explicitly when preparing a migration PR.
-- `make migrate` and `make status` mount the checkout read-only. Write access
-  is limited to `make new` and `make dump`.
-- The `Schema contract` CI workflow applies every migration to disposable
-  PostgreSQL `17.10-bookworm`, repeats `make migrate` to check re-runs, then
-  runs `make dump` and compares it with the committed `db/schema.sql`. Use
-  that PostgreSQL image when generating the canonical artifact. A different
-  server package or dump client may produce different version comments even
-  when the SQL schema matches. Update the CI image alongside `compose.yaml`
-  when upgrading PostgreSQL and regenerate the dump with the pinned dbmate.
+- `make migrate` keeps dbmate's automatic schema dump. Both `make migrate`
+  and `make dump` remove only the two generated version comments in the dump
+  header. PostgreSQL package suffixes such as `(Debian ...)` and `(Ubuntu ...)`
+  otherwise create environment-specific changes in Git. SQL, object comments,
+  and the `\restrict` / `\unrestrict` protection remain unchanged.
 - Complete the migration compatibility section from
   `.github/PULL_REQUEST_TEMPLATE/migration.md` in the PR description.
 - Review compatibility, locks, backfill cost, and grants.
 - Use dbmate's default transaction. Any exception must be explicit and
   reviewed.
 - Do not apply unmerged migrations to shared environments.
+
+The version comments survive because PostgreSQL emits `\restrict` before
+them, and dbmate 2.35.1 stops trimming leading comments at that command.
+See the [PostgreSQL dump writer](https://github.com/postgres/postgres/blob/REL_18_STABLE/src/bin/pg_dump/pg_backup_archiver.c)
+and [dbmate's header cleanup](https://github.com/amacneil/dbmate/blob/v2.35.1/pkg/dbutil/dbutil.go).
+The repository wrapper removes those two comments only before the first SQL
+statement. CI verifies dumps from both Debian and Alpine PostgreSQL packages.
 
 A designated operator manually applies merged migrations:
 
@@ -68,44 +69,6 @@ DATABASE_URL='<operator connection URL>' make status
 
 Keep credentials, LOGIN roles, real connection URLs, and `.env` files out of
 Git.
-
-## Recover a production checkout
-
-Production operators should not run `make dump` during a rollout. dbmate's
-automatic dump used to rewrite the tracked `db/schema.sql` after migrations.
-Even a difference in the PostgreSQL package version comment can leave a local
-change that blocks a later `git pull` when the incoming commit changes this
-file. `git fetch` alone does not update working files.
-
-If an update is blocked, inspect the checkout first:
-
-```sh
-git status --short --branch
-git diff -- db/schema.sql
-git diff --cached -- db/schema.sql
-```
-
-If the only tracked change is an unstaged, generated `db/schema.sql` and the
-diff only changes dump metadata, preserve it outside the checkout, restore
-that file from the current commit, and update with a fast-forward:
-
-```sh
-recovery_dir=$(mktemp -d "${TMPDIR:-/tmp}/gkfeed-infra-update.XXXXXX")
-cp db/schema.sql "$recovery_dir/schema.sql"
-git diff --binary -- db/schema.sql > "$recovery_dir/schema.patch"
-printf 'Saved schema dump and patch in %s\n' "$recovery_dir"
-git restore --source=HEAD --worktree -- db/schema.sql
-git pull --ff-only
-```
-
-If the diff changes SQL definitions, includes staged edits, or other tracked
-files are modified, investigate those changes before restoring anything.
-Keep local `.env` files and operational artifacts in place. Do not use a
-repository-wide reset or clean to resolve a generated dump conflict.
-
-After the fix is merged and the checkout is updated, use the production
-`make status`, `make migrate`, `make status` sequence above. Migrations still
-run manually with strict ordering; schema dumps belong in migration PRs.
 
 ## Independent application releases
 

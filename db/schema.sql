@@ -1,7 +1,5 @@
 \restrict dbmate
 
--- Dumped from database version 17.10 (Debian 17.10-1.pgdg12+1)
--- Dumped by pg_dump version 18.6
 
 SET statement_timeout = 0;
 SET lock_timeout = 0;
