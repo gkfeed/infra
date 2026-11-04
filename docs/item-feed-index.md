@@ -9,6 +9,25 @@ exceed PostgreSQL's B-tree entry limit. The existing unique
 
 ## Measurement
 
+The expected deployment has approximately 1,500 feeds with at most 300 items
+per feed. A second synthetic fixture modeled the upper bound: 1,500 feeds with
+300 items each, for 450,000 items in total. Rows were inserted interleaved by
+feed to represent writes spread across feeds; bodies were approximately 200
+bytes. After `VACUUM ANALYZE`, the same 250-candidate lookup below was run for
+three feeds. The first three executions warmed the cache; the table shows the
+median of the remaining nine `EXPLAIN (ANALYZE, BUFFERS)` executions per case.
+
+| Candidates | Before, ms | After, ms | Before plan | After plan |
+| --- | ---: | ---: | --- | --- |
+| 250 hits | 17.19 | 0.38 | parallel seq scan | bitmap index and heap scan |
+| 250 misses | 16.96 | 0.27 | parallel seq scan | bitmap index and heap scan |
+
+The last execution touched 17,297 shared buffers before and 303 after. The
+index occupied approximately 3.0 MiB. These are local measurements on a
+synthetic upper-bound fixture, not production measurements or guarantees.
+
+The earlier stress test used much larger individual feeds:
+
 On disposable PostgreSQL 17.10 with the canonical schema, a synthetic fixture
 held 210,100 items with roughly 200-byte bodies: feeds of 100, 10,000, 100,000,
 and 100,000 items, inserted in feed order. This distribution is an assumption,
