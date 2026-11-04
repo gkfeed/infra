@@ -40,6 +40,8 @@ make dump
 ```
 
 - Include the updated `db/schema.sql` in the migration PR.
+- `make migrate` disables dbmate's automatic schema dump. Only `make dump`
+  writes `db/schema.sql`; run it explicitly when preparing a migration PR.
 - Complete the migration compatibility section from
   `.github/PULL_REQUEST_TEMPLATE/migration.md` in the PR description.
 - Review compatibility, locks, backfill cost, and grants.
@@ -57,6 +59,44 @@ DATABASE_URL='<operator connection URL>' make status
 
 Keep credentials, LOGIN roles, real connection URLs, and `.env` files out of
 Git.
+
+## Recover a production checkout
+
+Production operators should not run `make dump` during a rollout. dbmate's
+automatic dump used to rewrite the tracked `db/schema.sql` after migrations.
+Even a difference in the PostgreSQL package version comment can leave a local
+change that blocks a later `git pull` when the incoming commit changes this
+file. `git fetch` alone does not update working files.
+
+If an update is blocked, inspect the checkout first:
+
+```sh
+git status --short --branch
+git diff -- db/schema.sql
+git diff --cached -- db/schema.sql
+```
+
+If the only tracked change is an unstaged, generated `db/schema.sql` and the
+diff only changes dump metadata, preserve it outside the checkout, restore
+that file from the current commit, and update with a fast-forward:
+
+```sh
+recovery_dir=$(mktemp -d "${TMPDIR:-/tmp}/gkfeed-infra-update.XXXXXX")
+cp db/schema.sql "$recovery_dir/schema.sql"
+git diff --binary -- db/schema.sql > "$recovery_dir/schema.patch"
+printf 'Saved schema dump and patch in %s\n' "$recovery_dir"
+git restore --source=HEAD --worktree -- db/schema.sql
+git pull --ff-only
+```
+
+If the diff changes SQL definitions, includes staged edits, or other tracked
+files are modified, investigate those changes before restoring anything.
+Keep local `.env` files and operational artifacts in place. Do not use a
+repository-wide reset or clean to resolve a generated dump conflict.
+
+After the fix is merged and the checkout is updated, use the production
+`make status`, `make migrate`, `make status` sequence above. Migrations still
+run manually with strict ordering; schema dumps belong in migration PRs.
 
 ## Independent application releases
 

@@ -13,7 +13,7 @@ DBMATE = docker run --rm --network=host \
 .PHONY: help migrate status new dump postgres-config postgres-up postgres-stop
 
 help: ## Show available commands
-	@echo "make migrate              Apply pending migrations"
+	@echo "make migrate              Apply pending migrations without writing a dump"
 	@echo "make status               Show migration status"
 	@echo "make new NAME=add_example Create a migration"
 	@echo "make dump                 Write db/schema.sql"
@@ -21,8 +21,8 @@ help: ## Show available commands
 	@echo "make postgres-up          Start production PostgreSQL"
 	@echo "make postgres-stop        Stop production PostgreSQL"
 
-migrate: ## Apply pending migrations with strict ordering
-	@$(DBMATE) migrate --strict
+migrate: ## Apply pending migrations with strict ordering, without changing tracked files
+	@$(DBMATE) --no-dump-schema migrate --strict
 
 status: ## Show migration status
 	@$(DBMATE) status
