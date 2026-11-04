@@ -40,12 +40,24 @@ make dump
 ```
 
 - Include the updated `db/schema.sql` in the migration PR.
+- `make migrate` keeps dbmate's automatic schema dump. Both `make migrate`
+  and `make dump` remove only the two generated version comments in the dump
+  header. PostgreSQL package suffixes such as `(Debian ...)` and `(Ubuntu ...)`
+  otherwise create environment-specific changes in Git. SQL, object comments,
+  and the `\restrict` / `\unrestrict` protection remain unchanged.
 - Complete the migration compatibility section from
   `.github/PULL_REQUEST_TEMPLATE/migration.md` in the PR description.
 - Review compatibility, locks, backfill cost, and grants.
 - Use dbmate's default transaction. Any exception must be explicit and
   reviewed.
 - Do not apply unmerged migrations to shared environments.
+
+The version comments survive because PostgreSQL emits `\restrict` before
+them, and dbmate 2.35.1 stops trimming leading comments at that command.
+See the [PostgreSQL dump writer](https://github.com/postgres/postgres/blob/REL_18_STABLE/src/bin/pg_dump/pg_backup_archiver.c)
+and [dbmate's header cleanup](https://github.com/amacneil/dbmate/blob/v2.35.1/pkg/dbutil/dbutil.go).
+The repository wrapper removes those two comments only before the first SQL
+statement. CI verifies dumps from both Debian and Alpine PostgreSQL packages.
 
 A designated operator manually applies merged migrations:
 

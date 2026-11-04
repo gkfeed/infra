@@ -6,6 +6,7 @@ DBMATE = docker run --rm --network=host \
 	--user "$$(id -u):$$(id -g)" \
 	-v "$(CURDIR):/work" -w /work \
 	-e DATABASE_URL -e DBMATE_STRICT=true \
+	--entrypoint /work/scripts/dbmate.sh \
 	$(DBMATE_IMAGE)
 
 .DEFAULT_GOAL := help
