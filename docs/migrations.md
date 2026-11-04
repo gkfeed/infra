@@ -42,6 +42,15 @@ make dump
 - Include the updated `db/schema.sql` in the migration PR.
 - `make migrate` disables dbmate's automatic schema dump. Only `make dump`
   writes `db/schema.sql`; run it explicitly when preparing a migration PR.
+- `make migrate` and `make status` mount the checkout read-only. Write access
+  is limited to `make new` and `make dump`.
+- The `Schema contract` CI workflow applies every migration to disposable
+  PostgreSQL `17.10-bookworm`, repeats `make migrate` to check re-runs, then
+  runs `make dump` and compares it with the committed `db/schema.sql`. Use
+  that PostgreSQL image when generating the canonical artifact. A different
+  server package or dump client may produce different version comments even
+  when the SQL schema matches. Update the CI image alongside `compose.yaml`
+  when upgrading PostgreSQL and regenerate the dump with the pinned dbmate.
 - Complete the migration compatibility section from
   `.github/PULL_REQUEST_TEMPLATE/migration.md` in the PR description.
 - Review compatibility, locks, backfill cost, and grants.

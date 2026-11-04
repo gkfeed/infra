@@ -1,0 +1,45 @@
+name: Schema contract
+
+on:
+  pull_request:
+  push:
+    branches: [master]
+
+permissions:
+  contents: read
+
+jobs:
+  schema:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    services:
+      postgres:
+        image: postgres:17.10-bookworm
+        env:
+          POSTGRES_USER: gkfeed_owner
+          POSTGRES_DB: gkfeed
+          POSTGRES_PASSWORD: disposable-ci-only
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U gkfeed_owner -d gkfeed"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+    env:
+      DATABASE_URL: postgres://gkfeed_owner:disposable-ci-only@127.0.0.1:5432/gkfeed?sslmode=disable
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - name: Apply migrations without changing the checkout
+        run: |
+          make status
+          make migrate
+          make status
+          make migrate
+          git diff --exit-code
+      - name: Verify the committed schema against a fresh database
+        run: |
+          make dump
+          git diff --exit-code -- db/schema.sql

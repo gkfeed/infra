@@ -2,9 +2,10 @@ DBMATE_VERSION := 2.35.1
 DBMATE_IMAGE := ghcr.io/amacneil/dbmate:$(DBMATE_VERSION)
 export NAME
 
+# Call with ro for operator commands and rw for artifact authoring.
 DBMATE = docker run --rm --network=host \
 	--user "$$(id -u):$$(id -g)" \
-	-v "$(CURDIR):/work" -w /work \
+	-v "$(CURDIR):/work:$(1)" -w /work \
 	-e DATABASE_URL -e DBMATE_STRICT=true \
 	$(DBMATE_IMAGE)
 
@@ -22,16 +23,16 @@ help: ## Show available commands
 	@echo "make postgres-stop        Stop production PostgreSQL"
 
 migrate: ## Apply pending migrations with strict ordering, without changing tracked files
-	@$(DBMATE) --no-dump-schema migrate --strict
+	@$(call DBMATE,ro) --no-dump-schema migrate --strict
 
 status: ## Show migration status
-	@$(DBMATE) status
+	@$(call DBMATE,ro) status
 
 new: check-name ## Create a timestamped migration (NAME=...)
-	@$(DBMATE) new "$$NAME"
+	@$(call DBMATE,rw) new "$$NAME"
 
 dump: ## Write the current schema to db/schema.sql
-	@$(DBMATE) dump
+	@$(call DBMATE,rw) dump
 
 postgres-config: ## Validate the production Compose file and environment
 	@docker compose --env-file .env config --quiet
